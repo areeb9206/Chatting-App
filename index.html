@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat App</title>
+
+  <link rel="stylesheet" href="style.css" />
+
+  <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-database.js"></script>
+</head>
+<body>
+
+  <!-- AUTH SECTION -->
+  <div id="authSection" class="auth-wrapper">
+    <div class="auth-box">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="showTab('loginTab', this)">Login</button>
+        <button class="tab-btn" onclick="showTab('signupTab', this)">Sign Up</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="loginTab" class="tab-content active">
+        <h2>Welcome Back</h2>
+        <input type="email" id="loginEmail" placeholder="Email" />
+        <input type="password" id="loginPassword" placeholder="Password" />
+        <button onclick="login()">Login</button>
+      </div>
+
+      <!-- SIGNUP -->
+      <div id="signupTab" class="tab-content">
+        <h2>Create Account</h2>
+        <input type="text" id="name" placeholder="Full Name" />
+        <input type="text" id="photoURL" placeholder="Profile Image URL (optional)" />
+        <input type="email" id="email" placeholder="Email" />
+        <input type="password" id="password" placeholder="Password" />
+        <button onclick="signUp()">Sign Up</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHAT SECTION -->
+  <div id="chatSection" style="display:none;">
+
+    <!-- LEFT SIDEBAR -->
+    <div id="leftPanel">
+      <div class="sidebar-header">
+        <div id="myName">My Profile</div>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </div>
+
+      <div class="search-box">
+        <input id="searchInput" placeholder="Search by name or email" />
+        <button onclick="searchUser()">Search</button>
+      </div>
+
+      <div id="searchResult"></div>
+
+      <div class="section-title">Requests</div>
+      <div id="requestList"></div>
+
+      <div class="section-title">Contacts</div>
+      <div id="userList"></div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div id="rightPanel">
+      <div id="emptyState" class="empty-state">
+        <h2>Select a contact to start chatting</h2>
+      </div>
+
+      <div id="chatContainer" style="display:none;">
+        <div id="chatHeader">
+          <button class="back-btn" onclick="goBack()">←</button>
+          <span id="chatWithName"></span>
+        </div>
+
+        <div id="messages"></div>
+
+        <div id="inputBox">
+          <input id="messageInput" placeholder="Type a message" />
+          <button onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
+<!--  -->
