@@ -9,6 +9,13 @@ body {
   background: #f0f2f5;
   overflow: hidden;
 }
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+
 
 button {
   cursor: pointer;
@@ -539,14 +546,14 @@ input {
 
   #chatSection {
     position: relative;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
   }
 
   #leftPanel {
     width: 100%;
     min-width: 100%;
-    height: 100vh;
+    height: 100dvh;
     border-right: none;
   }
 
@@ -554,7 +561,7 @@ input {
     position: fixed;
     inset: 0;
     width: 100%;
-    height: 100vh;
+    height: 100dvh;
     z-index: 100;
     display: none;
   }
@@ -632,4 +639,46 @@ input {
     width: 110px;
     height: 110px;
   }
+}
+
+
+/* MOBILE FIX */
+@media (max-width: 768px) {
+
+  body {
+    overflow: hidden;
+  }
+
+  #chatSection {
+    height: 100dvh;
+  }
+
+  #rightPanel {
+    height: 100dvh;
+  }
+
+  #chatContainer {
+    height: 100dvh;
+  }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding-bottom: 10px;
+  }
+
+  #inputBox {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: #f0f2f5;
+    z-index: 50;
+  }
+
+  #messageInput {
+    min-height: 45px;
+  }
+
 }
