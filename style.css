@@ -537,6 +537,255 @@ input {
   font-weight: 600;
 }
 
+/* .contact-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.contact-info {
+  display: flex;
+  flex-direction: column;
+} */
+
+.contact-status {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.contact-status.online {
+  color: #25d366;
+  font-weight: 600;
+}
+
+.contact-status.offline {
+  color: #667781;
+}
+.chat-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+#chatWithName {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+#chatStatus {
+  font-size: 12px;
+  margin-top: 2px;
+  color: #d1f7e2;
+}
+
+
+.contact-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 55px;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 12px;
+  margin: 6px 10px;
+
+  background: white;
+  border-radius: 10px;
+
+  border: 1px solid #edf0f2;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+
+  cursor: pointer;
+}
+
+.contact-pic {
+  width: 48px;
+  height: 48px;
+
+  border-radius: 50%;
+  object-fit: cover;
+
+  flex-shrink: 0;
+}
+
+.contact-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  margin-bottom: 4px;
+}
+
+.contact-top strong {
+  font-size: 16px;
+  color: #111b21;
+}
+
+.contact-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 10px;
+}
+
+.last-message {
+  flex: 1;
+
+  font-size: 13px;
+  color: #667781;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.last-msg-time {
+  font-size: 11px;
+  color: #667781;
+
+  white-space: nowrap;
+}
+
+.unread-badge {
+  background: #25d366;
+  color: white;
+
+  min-width: 20px;
+  height: 20px;
+
+  padding: 0 6px;
+
+  border-radius: 50px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.contact-pic-wrapper {
+  position: relative;
+  width: 48px;
+  height: 48px;
+
+  flex-shrink: 0;
+}
+
+.contact-pic {
+  width: 48px;
+  height: 48px;
+
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.status-dot {
+  position: absolute;
+
+  right: 1px;
+  bottom: 1px;
+
+  width: 13px;
+  height: 13px;
+
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.status-dot.online {
+  background: #25d366;
+}
+
+.status-dot.offline {
+  background: #9aa0a6;
+}
+
+
+.message-meta {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+
+  gap: 4px;
+
+  margin-top: 4px;
+
+  font-size: 11px;
+  color: #667781;
+}
+
+.msg-time {
+  font-size: 11px;
+}
+
+.ticks {
+  font-size: 13px;
+  color: #667781;
+}
+
+.ticks.seen {
+  color: #53bdeb;
+}
+.edit-message-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.edit-message-input {
+  width: 100%;
+  border: 1px solid #00a884;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  outline: none;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.edit-actions button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #00a884;
+  color: white;
+  font-size: 12px;
+}
+
+.cancel-edit-btn {
+  background: #667781 !important;
+}
+
+.delete-menu-btn {
+  color: #dc3545 !important;
+}
+
+.deleted-text {
+  color: #667781;
+  font-style: italic;
+}
+
+.edited-label {
+  font-size: 11px;
+  color: #667781;
+  margin-left: 6px;
+}
+
 /* MOBILE */
 @media (max-width: 768px) {
   .auth-box {

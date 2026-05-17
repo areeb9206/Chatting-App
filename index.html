@@ -12,7 +12,7 @@
     <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-database.js"></script>
   </head>
   <body>
-    <div id="authSection" class="auth-wrapper">
+    <div id="authSection" class="auth-wrapper" style="display:none;">
       <div class="auth-box">
         <div class="tabs">
           <button class="tab-btn active" onclick="showTab('loginTab', this)">
@@ -53,7 +53,7 @@
       </div>
     </div>
 
-    <div id="chatSection" style="display: none">
+    <div id="chatSection" style="display:none;">
       <div id="leftPanel">
         <div class="sidebar-header">
           <div class="profile-info">
@@ -132,15 +132,17 @@
 
         <div id="chatContainer" style="display: none">
           <div id="chatHeader">
-            <button class="back-btn" onclick="goBack()">←</button>
-            <img
-              id="chatPhoto"
-              class="chat-pic"
-              src="https://via.placeholder.com/40"
-            />
-            <span id="chatWithName"></span>
-          </div>
 
+            <button class="back-btn" onclick="goBack()">←</button>
+          
+            <img id="chatPhoto" class="chat-pic" />
+          
+            <div class="chat-user-info">
+              <div id="chatWithName"></div>
+              <div id="chatStatus">Offline</div>
+            </div>
+          
+          </div>
           <div id="messages"></div>
           <div id="replyPreview" class="reply-preview" style="display: none">
             <div>

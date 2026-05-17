@@ -15,8 +15,20 @@ const db = firebase.database();
 
 let currentUser = null;
 let currentChatUser = null;
-let replyMessage = null;
+let currentChatUserName = "";
+let currentChatId = null;
 
+let replyMessage = null;
+let typingTimer = null;
+
+let currentMessagesRef = null;
+let currentStatusRef = null;
+let currentTypingRef = null;
+
+let editingMessageId = null;
+let editingChatId = null;
+
+/* HELPERS */
 function getProfilePhoto(photoURL, name) {
   if (photoURL && photoURL.trim() !== "") return photoURL;
 
@@ -25,6 +37,17 @@ function getProfilePhoto(photoURL, name) {
     encodeURIComponent(name || "User") +
     "&background=075e54&color=fff"
   );
+}
+
+function escapeHtml(text) {
+  if (text === undefined || text === null) return "";
+
+  return String(text)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 /* AUTH */
@@ -39,12 +62,14 @@ auth.onAuthStateChanged(function (user) {
     loadMyProfile();
     loadContacts();
     loadRequests();
+    setOnlineStatus();
   } else {
     currentUser = null;
     currentChatUser = null;
+    currentChatId = null;
 
-    document.getElementById("authSection").style.display = "flex";
     document.getElementById("chatSection").style.display = "none";
+    document.getElementById("authSection").style.display = "flex";
   }
 });
 
@@ -64,10 +89,7 @@ function showTab(tabId, btn) {
 
 /* SIGNUP */
 function signUp() {
-  const username = document
-    .getElementById("username")
-    .value.trim()
-    .toLowerCase();
+  const username = document.getElementById("username").value.trim().toLowerCase();
   const name = document.getElementById("name").value.trim();
   const photoURL = document.getElementById("photoURL").value.trim();
   const email = document.getElementById("email").value.trim().toLowerCase();
@@ -107,10 +129,7 @@ function signUp() {
 
 /* LOGIN */
 function login() {
-  const identifier = document
-    .getElementById("loginIdentifier")
-    .value.trim()
-    .toLowerCase();
+  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
   const password = document.getElementById("loginPassword").value.trim();
 
   if (!identifier || !password) {
@@ -119,11 +138,9 @@ function login() {
   }
 
   if (identifier.includes("@")) {
-    auth
-      .signInWithEmailAndPassword(identifier, password)
-      .catch(function (error) {
-        alert(error.message);
-      });
+    auth.signInWithEmailAndPassword(identifier, password).catch(function (error) {
+      alert(error.message);
+    });
     return;
   }
 
@@ -149,12 +166,9 @@ function login() {
     });
 }
 
-/* FORGOT PASSWORD FROM LOGIN */
+/* FORGOT PASSWORD */
 function forgotPassword() {
-  const identifier = document
-    .getElementById("loginIdentifier")
-    .value.trim()
-    .toLowerCase();
+  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
 
   if (!identifier) {
     alert("Enter your username or email first.");
@@ -225,7 +239,6 @@ function loadMyProfile() {
   });
 }
 
-/* UPDATE DP BY URL */
 function updateProfilePhoto() {
   const newPhotoURL = document.getElementById("newPhotoURL").value.trim();
 
@@ -243,7 +256,6 @@ function updateProfilePhoto() {
     });
 }
 
-/* PASSWORD RESET FROM SETTINGS */
 function sendPasswordReset() {
   const email = document.getElementById("accountEmail").innerText;
 
@@ -255,7 +267,7 @@ function sendPasswordReset() {
   sendResetEmail(email);
 }
 
-/* PANEL HELPERS */
+/* PANELS */
 function hideAllRightPanels() {
   document.getElementById("emptyState").style.display = "none";
   document.getElementById("chatContainer").style.display = "none";
@@ -293,10 +305,7 @@ function closeAccountPanel() {
 
 /* SEARCH */
 function searchUser() {
-  const keyword = document
-    .getElementById("searchInput")
-    .value.trim()
-    .toLowerCase();
+  const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
   const resultDiv = document.getElementById("searchResult");
 
   resultDiv.innerHTML = "";
@@ -323,12 +332,12 @@ function searchUser() {
         div.className = "search-item";
 
         div.innerHTML = `
-        <strong>${user.name}</strong><br>
-        <small>@${user.username}</small>
-        <div class="item-actions">
-          <button disabled>Loading...</button>
-        </div>
-      `;
+          <strong>${escapeHtml(user.name)}</strong><br>
+          <small>@${escapeHtml(user.username)}</small>
+          <div class="item-actions">
+            <button disabled>Loading...</button>
+          </div>
+        `;
 
         resultDiv.appendChild(div);
 
@@ -338,7 +347,8 @@ function searchUser() {
           .once("value")
           .then(function (contactSnap) {
             if (contactSnap.exists()) {
-              actionContainer.innerHTML = `<button disabled style="background:#28a745;color:white;">Friend Added</button>`;
+              actionContainer.innerHTML =
+                `<button disabled style="background:#28a745;color:white;">Friend Added</button>`;
               return;
             }
 
@@ -346,9 +356,11 @@ function searchUser() {
               .once("value")
               .then(function (requestSnap) {
                 if (requestSnap.exists()) {
-                  actionContainer.innerHTML = `<button disabled style="background:#6c757d;color:white;">Request Sent</button>`;
+                  actionContainer.innerHTML =
+                    `<button disabled style="background:#6c757d;color:white;">Request Sent</button>`;
                 } else {
-                  actionContainer.innerHTML = `<button class="add-btn" onclick="sendRequest('${uid}')">Add</button>`;
+                  actionContainer.innerHTML =
+                    `<button class="add-btn" onclick="sendRequest('${uid}')">Add</button>`;
                 }
               });
           });
@@ -360,7 +372,7 @@ function searchUser() {
     });
 }
 
-/* REQUEST SEND */
+/* REQUESTS */
 function sendRequest(toUid) {
   db.ref("users/" + currentUser.uid)
     .once("value")
@@ -379,7 +391,6 @@ function sendRequest(toUid) {
     });
 }
 
-/* LOAD REQUESTS */
 function loadRequests() {
   const requestList = document.getElementById("requestList");
 
@@ -398,8 +409,8 @@ function loadRequests() {
         <div style="display:flex;align-items:center;gap:10px;">
           <img src="${photo}" class="contact-pic" />
           <div>
-            <strong>${req.fromName}</strong><br>
-            <small>@${req.fromUsername || ""}</small>
+            <strong>${escapeHtml(req.fromName)}</strong><br>
+            <small>@${escapeHtml(req.fromUsername || "")}</small>
           </div>
         </div>
 
@@ -414,7 +425,6 @@ function loadRequests() {
   });
 }
 
-/* ACCEPT REQUEST */
 function acceptRequest(fromUid) {
   Promise.all([
     db.ref("users/" + currentUser.uid).once("value"),
@@ -450,7 +460,6 @@ function acceptRequest(fromUid) {
     });
 }
 
-/* REJECT */
 function rejectRequest(fromUid) {
   db.ref("requests/" + currentUser.uid + "/" + fromUid).remove();
 }
@@ -464,51 +473,199 @@ function loadContacts() {
 
     snapshot.forEach(function (child) {
       const contact = child.val();
-      const photo = getProfilePhoto(contact.photoURL, contact.name);
 
-      const div = document.createElement("div");
-      div.className = "contact-item";
+      db.ref("users/" + contact.uid).once("value", function (userSnap) {
+        const userData = userSnap.val();
+        if (!userData) return;
 
-      div.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;">
-          <img src="${photo}" class="contact-pic" />
-          <div>
-            <strong>${contact.name}</strong><br>
-            <small>@${contact.username || ""}</small>
+        const photo = getProfilePhoto(userData.photoURL, userData.name);
+        const chatId = getChatId(currentUser.uid, contact.uid);
+
+        const div = document.createElement("div");
+        div.className = "contact-item";
+        div.id = "contact-" + contact.uid;
+
+        div.innerHTML = `
+          <div class="contact-pic-wrapper">
+            <img src="${photo}" class="contact-pic">
+            <span class="status-dot" id="status-${contact.uid}"></span>
           </div>
-        </div>
-      `;
 
-      div.onclick = function () {
-        openChat(contact.uid, contact.name, contact.photoURL || "");
-      };
+          <div class="contact-info">
+            <div class="contact-top">
+              <strong>${escapeHtml(userData.name)}</strong>
 
-      userList.appendChild(div);
+              <span class="unread-badge"
+                id="unread-${contact.uid}"
+                style="display:none;">
+                0
+              </span>
+            </div>
+
+            <div class="contact-bottom">
+              <div class="last-message" id="lastMsg-${contact.uid}">
+                No messages yet
+              </div>
+
+              <span class="last-msg-time" id="lastTime-${contact.uid}"></span>
+            </div>
+          </div>
+        `;
+
+        div.onclick = function () {
+          openChat(contact.uid, userData.name, userData.photoURL || "");
+        };
+
+        userList.appendChild(div);
+
+        db.ref("status/" + contact.uid).on("value", function (statusSnap) {
+          const dot = document.getElementById("status-" + contact.uid);
+          if (!dot) return;
+
+          const status = statusSnap.val();
+
+          if (status && status.state === "online") {
+            dot.classList.add("online");
+            dot.classList.remove("offline");
+          } else {
+            dot.classList.add("offline");
+            dot.classList.remove("online");
+          }
+        });
+
+        db.ref("lastMessages/" + chatId).on("value", function (lastSnap) {
+          const lastMsgDiv = document.getElementById("lastMsg-" + contact.uid);
+          const lastTimeDiv = document.getElementById("lastTime-" + contact.uid);
+
+          if (!lastMsgDiv || !lastTimeDiv) return;
+
+          if (!lastSnap.exists()) {
+            lastMsgDiv.innerText = "No messages yet";
+            lastTimeDiv.innerText = "";
+            return;
+          }
+
+          const msg = lastSnap.val();
+
+          if (msg.senderId !== currentUser.uid) {
+            markChatAsDelivered(chatId);
+          }
+
+          const prefix = msg.senderId === currentUser.uid ? "You: " : "";
+          let preview = msg.text || "";
+
+          if (preview.length > 30) {
+            preview = preview.slice(0, 30) + "...";
+          }
+
+          const time = new Date(msg.timestamp).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+
+          lastMsgDiv.innerText = prefix + preview;
+          lastTimeDiv.innerText = time;
+        });
+
+        db.ref("unread/" + currentUser.uid + "/" + chatId).on(
+          "value",
+          function (unreadSnap) {
+            const badge = document.getElementById("unread-" + contact.uid);
+            if (!badge) return;
+
+            const count = unreadSnap.val();
+
+            if (count && count > 0) {
+              badge.innerText = count;
+              badge.style.display = "inline-flex";
+            } else {
+              badge.innerText = "0";
+              badge.style.display = "none";
+            }
+          }
+        );
+      });
     });
   });
+}
+
+/* DELIVERED */
+function markChatAsDelivered(chatId) {
+  if (!currentUser) return;
+
+  db.ref("chats/" + chatId + "/messages")
+    .once("value")
+    .then(function (snapshot) {
+      const updates = {};
+
+      snapshot.forEach(function (child) {
+        const msg = child.val();
+        const messageId = child.key;
+
+        if (msg.senderId !== currentUser.uid && msg.delivered !== true) {
+          updates["chats/" + chatId + "/messages/" + messageId + "/delivered"] = true;
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        return db.ref().update(updates);
+      }
+    });
 }
 
 /* OPEN CHAT */
 function openChat(uid, name, photoURL = "") {
   currentChatUser = uid;
+  currentChatUserName = name;
+
+  const chatId = getChatId(currentUser.uid, uid);
+  currentChatId = chatId;
+
+  db.ref("unread/" + currentUser.uid + "/" + chatId).remove();
+
   const photo = getProfilePhoto(photoURL, name);
 
   hideAllRightPanels();
 
   document.getElementById("chatPhoto").src = photo;
   document.getElementById("chatWithName").innerText = name;
+
   document.getElementById("chatContainer").style.display = "flex";
+  document.getElementById("chatContainer").style.flexDirection = "column";
 
   if (window.innerWidth <= 768) {
     document.getElementById("rightPanel").classList.add("active");
   }
 
+  listenChatStatus(uid);
+  listenTypingStatus(uid);
   loadMessages();
+
+  setTimeout(function () {
+    markCurrentChatAsSeen();
+  }, 300);
 }
 
-/* BACK FROM CHAT */
+/* BACK */
 function goBack() {
   currentChatUser = null;
+  currentChatUserName = "";
+  currentChatId = null;
+
+  if (currentMessagesRef) {
+    currentMessagesRef.off();
+    currentMessagesRef = null;
+  }
+
+  if (currentStatusRef) {
+    currentStatusRef.off();
+    currentStatusRef = null;
+  }
+
+  if (currentTypingRef) {
+    currentTypingRef.off();
+    currentTypingRef = null;
+  }
 
   hideAllRightPanels();
   document.getElementById("emptyState").style.display = "flex";
@@ -533,12 +690,18 @@ function sendMessage() {
   db.ref("users/" + currentUser.uid).once("value", function (snapshot) {
     const me = snapshot.val();
     const chatId = getChatId(currentUser.uid, currentChatUser);
+    const newMsgRef = db.ref("chats/" + chatId + "/messages").push();
 
     const messageData = {
+      messageId: newMsgRef.key,
       senderId: currentUser.uid,
       senderName: me.name,
       text: text,
       timestamp: Date.now(),
+      delivered: false,
+      seen: false,
+      edited: false,
+      deleted: false,
     };
 
     if (replyMessage) {
@@ -548,19 +711,43 @@ function sendMessage() {
       };
     }
 
-    db.ref("chats/" + chatId + "/messages").push(messageData);
+    const updates = {};
 
-    input.value = "";
-    cancelReply();
+    updates["chats/" + chatId + "/messages/" + newMsgRef.key] = messageData;
+
+    updates["lastMessages/" + chatId] = {
+      messageId: newMsgRef.key,
+      senderId: currentUser.uid,
+      senderName: me.name,
+      text: text,
+      timestamp: messageData.timestamp,
+    };
+
+    updates["unread/" + currentChatUser + "/" + chatId] =
+      firebase.database.ServerValue.increment(1);
+
+    db.ref()
+      .update(updates)
+      .then(function () {
+        input.value = "";
+        cancelReply();
+      });
   });
 }
 
-function replyToMessage(msg) {
-  replyMessage = msg;
+/* REPLY */
+function replyToMessage(msg, messageId) {
+  replyMessage = {
+    senderName: msg.senderName,
+    text: msg.text,
+  };
 
   document.getElementById("replyPreview").style.display = "flex";
   document.getElementById("replyName").innerText = msg.senderName;
   document.getElementById("replyText").innerText = msg.text;
+
+  const menu = document.getElementById("msgMenu-" + messageId);
+  if (menu) menu.classList.remove("show");
 
   document.getElementById("messageInput").focus();
 }
@@ -578,9 +765,13 @@ function loadMessages() {
   const messages = document.getElementById("messages");
   const chatId = getChatId(currentUser.uid, currentChatUser);
 
-  db.ref("chats/" + chatId + "/messages").off();
+  if (currentMessagesRef) {
+    currentMessagesRef.off();
+  }
 
-  db.ref("chats/" + chatId + "/messages").on("value", function (snapshot) {
+  currentMessagesRef = db.ref("chats/" + chatId + "/messages");
+
+  currentMessagesRef.on("value", function (snapshot) {
     messages.innerHTML = "";
 
     snapshot.forEach(function (child) {
@@ -601,11 +792,100 @@ function loadMessages() {
 
       let replyHTML = "";
 
-      if (msg.replyTo) {
+      if (msg.replyTo && !msg.deleted) {
         replyHTML = `
           <div class="replied-message">
-            <strong>${msg.replyTo.senderName}</strong>
-            <p>${msg.replyTo.text}</p>
+            <strong>${escapeHtml(msg.replyTo.senderName)}</strong>
+            <p>${escapeHtml(msg.replyTo.text)}</p>
+          </div>
+        `;
+      }
+
+      let tickSymbol = "✓";
+      let tickClass = "";
+
+      if (msg.seen === true) {
+        tickSymbol = "✓✓";
+        tickClass = "seen";
+      } else if (msg.delivered === true) {
+        tickSymbol = "✓✓";
+      }
+
+      const ticksHTML =
+        msg.senderId === currentUser.uid
+          ? `<span class="ticks ${tickClass}">${tickSymbol}</span>`
+          : "";
+
+      let messageBodyHTML = "";
+
+      if (msg.deleted) {
+        messageBodyHTML = `
+          <div class="deleted-text">
+            This message was deleted
+          </div>
+        `;
+      } else if (editingMessageId === messageId && editingChatId === chatId) {
+        messageBodyHTML = `
+          <div class="edit-message-box">
+            <input
+              type="text"
+              id="editInput-${messageId}"
+              class="edit-message-input"
+              value="${escapeHtml(msg.text)}"
+            />
+
+            <div class="edit-actions">
+              <button onclick="saveEditedMessage('${chatId}', '${messageId}')">
+                Save
+              </button>
+
+              <button class="cancel-edit-btn" onclick="cancelEditMessage()">
+                Cancel
+              </button>
+            </div>
+          </div>
+        `;
+      } else {
+        messageBodyHTML = `
+          <div>
+            ${escapeHtml(msg.text)}
+            ${
+              msg.edited
+                ? `<span class="edited-label">edited</span>`
+                : ""
+            }
+          </div>
+        `;
+      }
+
+      let menuHTML = "";
+
+      if (!msg.deleted) {
+        menuHTML = `
+          <div class="msg-menu-wrap">
+            <button class="msg-dots" onclick="toggleMessageMenu('${messageId}')">⋮</button>
+
+            <div id="msgMenu-${messageId}" class="msg-menu">
+              <button onclick="replyToMessageById('${chatId}', '${messageId}')">
+                Reply
+              </button>
+
+              ${
+                msg.senderId === currentUser.uid
+                  ? `<button onclick="startEditMessage('${chatId}', '${messageId}')">
+                      Edit
+                    </button>`
+                  : ""
+              }
+
+              ${
+                msg.senderId === currentUser.uid
+                  ? `<button class="delete-menu-btn" onclick="deleteMessageForEveryone('${chatId}', '${messageId}')">
+                      Delete for everyone
+                    </button>`
+                  : ""
+              }
+            </div>
           </div>
         `;
       }
@@ -614,22 +894,20 @@ function loadMessages() {
         <div class="msg-wrapper">
           <div class="bubble">
             ${replyHTML}
-            <div class="sender">${msg.senderName}</div>
-            <div>${msg.text}</div>
-            <div class="msg-time">${time}</div>
-          </div>
 
-          <div class="msg-menu-wrap">
-            <button class="msg-dots" onclick="toggleMessageMenu('${messageId}')">⋮</button>
+            <div class="sender">
+              ${escapeHtml(msg.senderName)}
+            </div>
 
-            <div id="msgMenu-${messageId}" class="msg-menu">
-              <button onclick='replyToMessage(${JSON.stringify(
-                msg
-              )}, "${messageId}")'>
-                Reply
-              </button>
+            ${messageBodyHTML}
+
+            <div class="message-meta">
+              <span class="msg-time">${time}</span>
+              ${ticksHTML}
             </div>
           </div>
+
+          ${menuHTML}
         </div>
       `;
 
@@ -637,8 +915,14 @@ function loadMessages() {
     });
 
     messages.scrollTop = messages.scrollHeight;
+
+    if (currentChatId === chatId && currentChatUser && !document.hidden) {
+      markCurrentChatAsSeen();
+    }
   });
 }
+
+/* MESSAGE MENU */
 function toggleMessageMenu(messageId) {
   document.querySelectorAll(".msg-menu").forEach(function (menu) {
     if (menu.id !== "msgMenu-" + messageId) {
@@ -652,21 +936,6 @@ function toggleMessageMenu(messageId) {
   }
 }
 
-function replyToMessage(msg, messageId) {
-  replyMessage = {
-    senderName: msg.senderName,
-    text: msg.text,
-  };
-
-  document.getElementById("replyPreview").style.display = "flex";
-  document.getElementById("replyName").innerText = msg.senderName;
-  document.getElementById("replyText").innerText = msg.text;
-
-  const menu = document.getElementById("msgMenu-" + messageId);
-  if (menu) menu.classList.remove("show");
-
-  document.getElementById("messageInput").focus();
-}
 document.addEventListener("click", function (e) {
   if (
     !e.target.classList.contains("msg-dots") &&
@@ -677,6 +946,237 @@ document.addEventListener("click", function (e) {
     });
   }
 });
+
+/* REPLY BY ID */
+function replyToMessageById(chatId, messageId) {
+  db.ref("chats/" + chatId + "/messages/" + messageId)
+    .once("value")
+    .then(function (snapshot) {
+      const msg = snapshot.val();
+
+      if (!msg || msg.deleted) return;
+
+      replyToMessage(msg, messageId);
+    });
+}
+
+/* EDIT MESSAGE INLINE */
+function startEditMessage(chatId, messageId) {
+  editingChatId = chatId;
+  editingMessageId = messageId;
+
+  document.querySelectorAll(".msg-menu").forEach(function (menu) {
+    menu.classList.remove("show");
+  });
+
+  loadMessages();
+
+  setTimeout(function () {
+    const input = document.getElementById("editInput-" + messageId);
+    if (input) {
+      input.focus();
+      input.select();
+
+      input.addEventListener("keypress", function (e) {
+        if (e.key === "Enter") {
+          saveEditedMessage(chatId, messageId);
+        }
+      });
+    }
+  }, 200);
+}
+
+function cancelEditMessage() {
+  editingChatId = null;
+  editingMessageId = null;
+  loadMessages();
+}
+
+function saveEditedMessage(chatId, messageId) {
+  const input = document.getElementById("editInput-" + messageId);
+  if (!input) return;
+
+  const updatedText = input.value.trim();
+
+  if (!updatedText) {
+    alert("Message can't be empty.");
+    return;
+  }
+
+  const updates = {};
+
+  updates["chats/" + chatId + "/messages/" + messageId + "/text"] = updatedText;
+  updates["chats/" + chatId + "/messages/" + messageId + "/edited"] = true;
+
+  db.ref("lastMessages/" + chatId).once("value", function (snapshot) {
+    const lastMsg = snapshot.val();
+
+    if (lastMsg && lastMsg.messageId === messageId) {
+      updates["lastMessages/" + chatId + "/text"] = updatedText;
+    }
+
+    db.ref()
+      .update(updates)
+      .then(function () {
+        editingChatId = null;
+        editingMessageId = null;
+      });
+  });
+}
+
+/* DELETE MESSAGE */
+function deleteMessageForEveryone(chatId, messageId) {
+  const confirmDelete = confirm("Delete this message for everyone?");
+
+  if (!confirmDelete) return;
+
+  const updates = {};
+
+  updates["chats/" + chatId + "/messages/" + messageId + "/deleted"] = true;
+  updates["chats/" + chatId + "/messages/" + messageId + "/text"] = "";
+  updates["chats/" + chatId + "/messages/" + messageId + "/replyTo"] = null;
+
+  db.ref("lastMessages/" + chatId).once("value", function (snapshot) {
+    const lastMsg = snapshot.val();
+
+    if (lastMsg && lastMsg.messageId === messageId) {
+      updates["lastMessages/" + chatId + "/text"] = "This message was deleted";
+    }
+
+    db.ref().update(updates);
+  });
+}
+
+/* SEEN */
+function markCurrentChatAsSeen() {
+  if (!currentUser || !currentChatUser || !currentChatId) return;
+  if (document.hidden) return;
+
+  db.ref("chats/" + currentChatId + "/messages")
+    .once("value")
+    .then(function (snapshot) {
+      const updates = {};
+
+      snapshot.forEach(function (child) {
+        const msg = child.val();
+        const messageId = child.key;
+
+        if (msg.senderId !== currentUser.uid && msg.seen !== true) {
+          updates["chats/" + currentChatId + "/messages/" + messageId + "/seen"] = true;
+          updates["chats/" + currentChatId + "/messages/" + messageId + "/delivered"] = true;
+        }
+      });
+
+      if (Object.keys(updates).length > 0) {
+        return db.ref().update(updates);
+      }
+    });
+}
+
+/* ONLINE STATUS */
+function setOnlineStatus() {
+  if (!currentUser) return;
+
+  const statusRef = db.ref("status/" + currentUser.uid);
+
+  statusRef.update({
+    state: "online",
+    lastSeen: Date.now(),
+  });
+
+  statusRef.onDisconnect().update({
+    state: "offline",
+    lastSeen: Date.now(),
+  });
+}
+
+function listenChatStatus(uid) {
+  if (currentStatusRef) {
+    currentStatusRef.off();
+  }
+
+  currentStatusRef = db.ref("status/" + uid);
+
+  currentStatusRef.on("value", function (snapshot) {
+    const status = snapshot.val();
+    const statusDiv = document.getElementById("chatStatus");
+
+    if (!statusDiv) return;
+
+    if (!status) {
+      statusDiv.innerText = "Offline";
+      return;
+    }
+
+    if (status.state === "online") {
+      statusDiv.innerText = "Online";
+    } else {
+      const time = new Date(status.lastSeen).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      statusDiv.innerText = "Last seen " + time;
+    }
+  });
+}
+
+/* TYPING */
+function handleTyping() {
+  if (!currentUser || !currentChatUser) return;
+
+  const chatId = getChatId(currentUser.uid, currentChatUser);
+
+  db.ref("typing/" + chatId + "/" + currentUser.uid).set(true);
+
+  clearTimeout(typingTimer);
+
+  typingTimer = setTimeout(function () {
+    db.ref("typing/" + chatId + "/" + currentUser.uid).remove();
+  }, 1500);
+}
+
+function listenTypingStatus(otherUid) {
+  if (currentTypingRef) {
+    currentTypingRef.off();
+  }
+
+  const chatId = getChatId(currentUser.uid, otherUid);
+  currentTypingRef = db.ref("typing/" + chatId + "/" + otherUid);
+
+  currentTypingRef.on("value", function (snapshot) {
+    const isTyping = snapshot.val();
+
+    if (isTyping) {
+      document.getElementById("chatStatus").innerText = "typing...";
+    } else {
+      updateChatHeaderStatus(otherUid);
+    }
+  });
+}
+
+function updateChatHeaderStatus(uid) {
+  db.ref("status/" + uid).once("value", function (snapshot) {
+    const status = snapshot.val();
+    const statusDiv = document.getElementById("chatStatus");
+
+    if (!statusDiv) return;
+
+    if (status && status.state === "online") {
+      statusDiv.innerText = "Online";
+    } else if (status && status.lastSeen) {
+      const time = new Date(status.lastSeen).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      statusDiv.innerText = "Last seen " + time;
+    } else {
+      statusDiv.innerText = "Offline";
+    }
+  });
+}
+
 /* DOM READY */
 document.addEventListener("DOMContentLoaded", function () {
   const messageInput = document.getElementById("messageInput");
@@ -688,6 +1188,10 @@ document.addEventListener("DOMContentLoaded", function () {
         sendMessage();
       }
     });
+
+    messageInput.addEventListener("input", function () {
+      handleTyping();
+    });
   }
 
   if (searchInput) {
@@ -697,6 +1201,12 @@ document.addEventListener("DOMContentLoaded", function () {
         searchUser();
       }
     });
+  }
+});
+
+document.addEventListener("visibilitychange", function () {
+  if (!document.hidden && currentChatUser) {
+    markCurrentChatAsSeen();
   }
 });
 
