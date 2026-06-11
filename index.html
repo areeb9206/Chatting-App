@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chat App</title>
-
+    <title>The A&amp;A Vault</title>
+    <meta name="description" content="The A&A Vault - a premium private chatting app" />
+    <meta name="theme-color" content="#0b1020" />
+    <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
 
     <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
@@ -12,152 +19,179 @@
     <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-database.js"></script>
   </head>
   <body>
-    <div id="authSection" class="auth-wrapper" style="display:none;">
-      <div class="auth-box">
-        <div class="tabs">
-          <button class="tab-btn active" onclick="showTab('loginTab', this)">
-            Login
-          </button>
-          <button class="tab-btn" onclick="showTab('signupTab', this)">
-            Sign Up
-          </button>
+    <div id="pageLoader" class="page-loader">
+      <div class="loader-card">
+        <div class="brand-mark">A&amp;A</div>
+        <h1>The A&amp;A Vault</h1>
+        <p>Securing your chats...</p>
+        <div class="loader-line"><span></span></div>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <main id="authSection" class="auth-wrapper" style="display: none">
+      <section class="auth-box">
+        <div class="auth-top-actions"><button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme"><span id="authThemeIcon">☾</span></button></div>
+        <div class="auth-brand">
+          <div class="brand-mark">A&amp;A</div>
+          <div>
+            <h1>The A&amp;A Vault</h1>
+            <p>Private messaging with a premium, modern interface.</p>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <button class="tab-btn active" type="button" onclick="showTab('loginTab', this)">Login</button>
+          <button class="tab-btn" type="button" onclick="showTab('signupTab', this)">Sign Up</button>
         </div>
 
         <div id="loginTab" class="tab-content active">
           <h2>Welcome Back</h2>
-          <input
-            type="text"
-            id="loginIdentifier"
-            placeholder="Username or Email"
-          />
-          <input type="password" id="loginPassword" placeholder="Password" />
-          <button onclick="login()">Login</button>
-          <button class="forgot-btn" onclick="forgotPassword()">
-            Forgot Password?
-          </button>
+          <label>Username or Email</label>
+          <input type="text" id="loginIdentifier" placeholder="areeb or areeb@email.com" autocomplete="username" />
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" />
+          <button class="primary-btn" type="button" onclick="login()">Login</button>
+          <button class="link-btn" type="button" onclick="forgotPassword()">Forgot Password?</button>
         </div>
 
         <div id="signupTab" class="tab-content">
           <h2>Create Account</h2>
-          <input type="text" id="username" placeholder="Username" />
-          <input type="text" id="name" placeholder="Display Name" />
-          <input
-            type="text"
-            id="photoURL"
-            placeholder="Profile Image URL optional"
-          />
-          <input type="email" id="email" placeholder="Email" />
-          <input type="password" id="password" placeholder="Password" />
-          <button onclick="signUp()">Sign Up</button>
+          <label>Username</label>
+          <input type="text" id="username" placeholder="unique username" autocomplete="username" />
+          <label>Display Name</label>
+          <input type="text" id="name" placeholder="Your name" autocomplete="name" />
+          <label>Profile Image URL <span>optional</span></label>
+          <input type="url" id="photoURL" placeholder="https://example.com/photo.jpg" />
+          <label>Email</label>
+          <input type="email" id="email" placeholder="you@email.com" autocomplete="email" />
+          <label>Password</label>
+          <input type="password" id="password" placeholder="At least 6 characters" autocomplete="new-password" />
+          <button class="primary-btn" type="button" onclick="signUp()">Create Vault Account</button>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
 
-    <div id="chatSection" style="display:none;">
-      <div id="leftPanel">
-        <div class="sidebar-header">
-          <div class="profile-info">
-            <img
-              id="myPhoto"
-              class="profile-pic"
-              src="https://via.placeholder.com/40"
-            />
-            <span id="myName">My Profile</span>
+    <main id="chatSection" style="display: none">
+      <aside id="leftPanel">
+        <header class="sidebar-header">
+          <div class="profile-info" onclick="openAccountPanel()" title="Open account">
+            <img id="myPhoto" class="profile-pic" src="" alt="My profile" />
+            <div class="profile-text">
+              <strong id="myName">The A&amp;A Vault</strong>
+              <span id="myUsername">Loading...</span>
+            </div>
           </div>
-
-          <button class="dots-btn" onclick="openAccountPanel()">⋮</button>
-        </div>
+          <div class="sidebar-actions">
+            <button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme"><span id="chatThemeIcon">☾</span></button>
+            <button class="icon-btn" type="button" onclick="openAccountPanel()" aria-label="Account menu">⋮</button>
+          </div>
+        </header>
 
         <div class="search-box">
-          <input id="searchInput" placeholder="Search by username" />
-          <button onclick="searchUser()">Search</button>
+          <div class="search-row">
+            <input id="searchInput" placeholder="Search username or name" />
+            <button type="button" onclick="searchUser()">Search</button>
+          </div>
+          <small>Only added contacts can chat with you.</small>
         </div>
 
-        <div id="searchResult"></div>
+        <div id="searchResult" class="search-result"></div>
 
-        <div class="section-title">Requests</div>
-        <div id="requestList"></div>
+        <section class="list-section">
+          <div class="section-title">Requests</div>
+          <div id="requestList" class="list-content empty-small">No requests</div>
+        </section>
 
-        <div class="section-title">Contacts</div>
-        <div id="userList"></div>
-      </div>
+        <section class="list-section contacts-section">
+          <div class="section-title">Contacts</div>
+          <div id="userList" class="list-content empty-small">No contacts yet</div>
+        </section>
+      </aside>
 
-      <div id="rightPanel">
+      <section id="rightPanel">
         <div id="emptyState" class="empty-state">
-          <h2>Select a contact to start chatting</h2>
+          <div class="empty-card">
+            <div class="empty-icon">💬</div>
+            <h2>The A&amp;A Vault</h2>
+            <p>Select a contact to start private chatting.</p>
+          </div>
         </div>
 
-        <div id="accountPanel" style="display: none">
-          <div id="accountHeader">
-            <button class="back-btn" onclick="closeAccountPanel()">←</button>
+        <section id="accountPanel" style="display: none">
+          <header id="accountHeader">
+            <button class="back-btn" type="button" onclick="closeAccountPanel()">←</button>
             <span>Account Details</span>
-          </div>
-
+          </header>
           <div class="account-content">
-            <img
-              id="accountPhoto"
-              class="account-big-photo"
-              src="https://via.placeholder.com/120"
-            />
+            <img id="accountPhoto" class="account-big-photo" src="" alt="Account profile" />
             <h2 id="accountName">User Name</h2>
-            <input
-              type="text"
-              id="newPhotoURL"
-              placeholder="New profile image URL"
-            />
+            <p class="muted">Manage your profile and account security.</p>
 
-            <button class="account-password-btn" onclick="updateProfilePhoto()">
-              Update DP
-            </button>
-
-            <div class="account-card">
-              <p>Username</p>
-              <span id="accountUsername"></span>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div>
+                  <strong>Message Alerts</strong>
+                  <small id="notificationStatus">Off — enable in-app sound, unread badges and title alerts.</small>
+                </div>
+                <button id="enableNotifyBtn" class="notify-mini-btn" type="button">Enable</button>
+              </div>
             </div>
 
-            <div class="account-card">
-              <p>Email</p>
-              <span id="accountEmail"></span>
+            <div class="settings-card">
+              <div class="settings-row">
+                <div>
+                  <strong>Theme</strong>
+                  <small>Switch between premium dark mode and clean light mode.</small>
+                </div>
+                <button class="theme-toggle" type="button" onclick="toggleTheme()"><span id="accountThemeIcon">☾</span> Theme</button>
+              </div>
             </div>
 
-            <button class="account-password-btn" onclick="sendPasswordReset()">
-              Change Password
-            </button>
+            <div class="account-form-card">
+              <label>Profile Image URL</label>
+              <input type="url" id="newPhotoURL" placeholder="Paste new image URL" />
+              <button class="secondary-btn" type="button" onclick="updateProfilePhoto()">Update DP</button>
+            </div>
 
-            <button class="account-logout-btn" onclick="logout()">
-              Logout
-            </button>
+            <div class="account-card"><p>Username</p><span id="accountUsername"></span></div>
+            <div class="account-card"><p>Email</p><span id="accountEmail"></span></div>
+
+            <div class="account-actions">
+              <button class="secondary-btn" type="button" onclick="sendPasswordReset()">Change Password</button>
+              <button class="danger-btn" type="button" onclick="logout()">Logout</button>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div id="chatContainer" style="display: none">
-          <div id="chatHeader">
-
-            <button class="back-btn" onclick="goBack()">←</button>
-          
-            <img id="chatPhoto" class="chat-pic" />
-          
+        <section id="chatContainer" style="display: none">
+          <header id="chatHeader">
+            <button class="back-btn" type="button" onclick="goBack()">←</button>
+            <img id="chatPhoto" class="chat-pic" src="" alt="Chat user" />
             <div class="chat-user-info">
-              <div id="chatWithName"></div>
+              <div id="chatWithName">Select Chat</div>
               <div id="chatStatus">Offline</div>
             </div>
-          
-          </div>
+          </header>
+
           <div id="messages"></div>
+
           <div id="replyPreview" class="reply-preview" style="display: none">
             <div>
               <strong id="replyName"></strong>
               <p id="replyText"></p>
             </div>
-            <button onclick="cancelReply()">×</button>
+            <button type="button" onclick="cancelReply()">×</button>
           </div>
-          <div id="inputBox">
-            <input id="messageInput" placeholder="Type a message" />
-            <button onclick="sendMessage()">Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
+
+          <footer id="inputBox">
+            <input id="messageInput" placeholder="Type a message" autocomplete="off" />
+            <button id="sendBtn" type="button" onclick="sendMessage()">➤</button>
+          </footer>
+        </section>
+      </section>
+    </main>
 
     <script src="app.js"></script>
   </body>

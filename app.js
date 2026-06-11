@@ -1,425 +1,618 @@
 const firebaseConfig = {
-  apiKey: "AIzaSyBphIOv0XFDE0AJORVO7dRSnnYnj2ABdXk",
-  authDomain: "todo-app-ce884.firebaseapp.com",
-  databaseURL: "https://todo-app-ce884-default-rtdb.firebaseio.com",
-  projectId: "todo-app-ce884",
-  storageBucket: "todo-app-ce884.firebasestorage.app",
-  messagingSenderId: "68439117018",
-  appId: "1:68439117018:web:21b3dcb792e181b12ce9e3",
+  apiKey: "AIzaSyCVHKaUghCLxoKxLFruV8ZZcH-ZPP60UHc",
+  authDomain: "the-aa-vault.firebaseapp.com",
+  databaseURL: "https://the-aa-vault-default-rtdb.firebaseio.com",
+  projectId: "the-aa-vault",
+  storageBucket: "the-aa-vault.firebasestorage.app",
+  messagingSenderId: "49808888573",
+  appId: "1:49808888573:web:a58dae91bc216b7ee82494",
+  measurementId: "G-Y1294J0K32",
 };
 
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.database();
+let alertsEnabled = localStorage.getItem("aaVaultMessageAlerts") === "on";
+let originalTitle = document.title;
+const lastAlertTimestamps = {};
 
 let currentUser = null;
 let currentChatUser = null;
 let currentChatUserName = "";
 let currentChatId = null;
-
 let replyMessage = null;
 let typingTimer = null;
+let toastTimer = null;
+let editingMessageId = null;
+let editingChatId = null;
 
 let currentMessagesRef = null;
 let currentStatusRef = null;
 let currentTypingRef = null;
+let requestsRef = null;
+let contactsRef = null;
+let myProfileRef = null;
+let connectedRef = null;
+const activeContactListeners = [];
 
-let editingMessageId = null;
-let editingChatId = null;
+const $ = (id) => document.getElementById(id);
 
-/* HELPERS */
-function getProfilePhoto(photoURL, name) {
-  if (photoURL && photoURL.trim() !== "") return photoURL;
+function showLoader() {
+  const loader = $("pageLoader");
+  if (loader) loader.classList.remove("hidden");
+}
 
-  return (
-    "https://ui-avatars.com/api/?name=" +
-    encodeURIComponent(name || "User") +
-    "&background=075e54&color=fff"
+function hideLoader() {
+  const loader = $("pageLoader");
+  if (loader) loader.classList.add("hidden");
+}
+
+function showToast(message, type = "success") {
+  const toast = $("toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.className = "toast show " + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.className = "toast";
+  }, 2800);
+}
+
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem("aaVaultDeviceId");
+  if (!id) {
+    id = "web_" + Math.random().toString(36).slice(2) + "_" + Date.now().toString(36);
+    localStorage.setItem("aaVaultDeviceId", id);
+  }
+  return id;
+}
+
+function applyTheme(theme) {
+  const safeTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", safeTheme);
+  localStorage.setItem("aaVaultTheme", safeTheme);
+  const icon = safeTheme === "light" ? "☀" : "☾";
+  ["authThemeIcon", "chatThemeIcon", "accountThemeIcon"].forEach((id) => {
+    const el = $(id);
+    if (el) el.textContent = icon;
+  });
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.setAttribute("content", safeTheme === "light" ? "#f3efe7" : "#0b1020");
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem("aaVaultTheme");
+  const preferredTheme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  applyTheme(savedTheme || preferredTheme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute("data-theme") || "dark";
+  applyTheme(current === "dark" ? "light" : "dark");
+}
+
+function updateNotificationStatus(message) {
+  const status = $("notificationStatus");
+  if (status) status.textContent = message;
+  const btn = $("enableNotifyBtn");
+  if (btn) btn.textContent = alertsEnabled ? "On" : "Enable";
+}
+
+function enableMessageAlerts() {
+  alertsEnabled = true;
+  localStorage.setItem("aaVaultMessageAlerts", "on");
+  updateNotificationStatus("On — in-app alerts, sound, unread badges and title alerts enabled.");
+  showToast("Message alerts enabled.", "success");
+
+  // Optional: while the website/app is open in background, browsers may show a local notification.
+  if (("Notification" in window) && Notification.permission === "default") {
+    Notification.requestPermission().then(() => updateNotificationStatus(
+      alertsEnabled ? "On — in-app alerts enabled." : "Off — alerts disabled."
+    ));
+  }
+}
+window.enableMessageAlerts = enableMessageAlerts;
+window.enablePushNotifications = enableMessageAlerts;
+
+function autoRegisterPushIfAllowed() {
+  updateNotificationStatus(
+    alertsEnabled
+      ? "On — in-app alerts, sound, unread badges and title alerts enabled."
+      : "Off — press Enable for in-app message alerts."
   );
 }
 
-function escapeHtml(text) {
-  if (text === undefined || text === null) return "";
-
-  return String(text)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+function playMessageSound() {
+  if (!alertsEnabled) return;
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 740;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  } catch (error) {
+    console.warn("Message sound unavailable", error);
+  }
 }
 
-/* AUTH */
-auth.onAuthStateChanged(function (user) {
-  if (user) {
-    currentUser = user;
-
-    document.getElementById("authSection").style.display = "none";
-    document.getElementById("chatSection").style.display = "flex";
-
-    showEmptyState();
-    loadMyProfile();
-    loadContacts();
-    loadRequests();
-    setOnlineStatus();
-  } else {
-    currentUser = null;
-    currentChatUser = null;
-    currentChatId = null;
-
-    document.getElementById("chatSection").style.display = "none";
-    document.getElementById("authSection").style.display = "flex";
-  }
-});
-
-/* TABS */
-function showTab(tabId, btn) {
-  document.querySelectorAll(".tab-content").forEach(function (tab) {
-    tab.classList.remove("active");
-  });
-
-  document.querySelectorAll(".tab-btn").forEach(function (b) {
-    b.classList.remove("active");
-  });
-
-  document.getElementById(tabId).classList.add("active");
-  btn.classList.add("active");
+function flashTitle(name) {
+  if (!alertsEnabled || !document.hidden) return;
+  let flashes = 0;
+  const title = "New message • The A&A Vault";
+  clearInterval(window.aaVaultTitleTimer);
+  window.aaVaultTitleTimer = setInterval(() => {
+    document.title = document.title === title ? originalTitle : title;
+    flashes += 1;
+    if (flashes > 8) {
+      clearInterval(window.aaVaultTitleTimer);
+      document.title = title;
+    }
+  }, 900);
 }
 
-/* SIGNUP */
-function signUp() {
-  const username = document.getElementById("username").value.trim().toLowerCase();
-  const name = document.getElementById("name").value.trim();
-  const photoURL = document.getElementById("photoURL").value.trim();
-  const email = document.getElementById("email").value.trim().toLowerCase();
-  const password = document.getElementById("password").value.trim();
-
-  if (!username || !name || !email || !password) {
-    alert("Please fill all fields.");
-    return;
-  }
-
-  db.ref("users")
-    .orderByChild("username")
-    .equalTo(username)
-    .once("value")
-    .then(function (snapshot) {
-      if (snapshot.exists()) {
-        throw new Error("Username already taken.");
-      }
-
-      return auth.createUserWithEmailAndPassword(email, password);
-    })
-    .then(function (result) {
-      return db.ref("users/" + result.user.uid).set({
-        username: username,
-        name: name,
-        email: email,
-        photoURL: photoURL || "",
+function showLocalMessageAlert(senderName, text) {
+  if (!alertsEnabled) return;
+  const body = text ? String(text).slice(0, 90) : "New message";
+  showToast(senderName + ": " + body, "info");
+  playMessageSound();
+  flashTitle(senderName);
+  if (("Notification" in window) && Notification.permission === "granted" && document.hidden) {
+    try {
+      new Notification("The A&A Vault", {
+        body: senderName + ": " + body,
+        icon: "assets/icon-192.png",
+        badge: "assets/icon-192.png",
       });
-    })
-    .then(function () {
-      alert("Account created successfully!");
-    })
-    .catch(function (error) {
-      alert(error.message);
-    });
-}
-
-/* LOGIN */
-function login() {
-  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
-  const password = document.getElementById("loginPassword").value.trim();
-
-  if (!identifier || !password) {
-    alert("Please fill all fields.");
-    return;
-  }
-
-  if (identifier.includes("@")) {
-    auth.signInWithEmailAndPassword(identifier, password).catch(function (error) {
-      alert(error.message);
-    });
-    return;
-  }
-
-  db.ref("users")
-    .orderByChild("username")
-    .equalTo(identifier)
-    .once("value")
-    .then(function (snapshot) {
-      if (!snapshot.exists()) {
-        throw new Error("Username not found.");
-      }
-
-      let email = "";
-
-      snapshot.forEach(function (child) {
-        email = child.val().email;
-      });
-
-      return auth.signInWithEmailAndPassword(email, password);
-    })
-    .catch(function (error) {
-      alert(error.message);
-    });
-}
-
-/* FORGOT PASSWORD */
-function forgotPassword() {
-  const identifier = document.getElementById("loginIdentifier").value.trim().toLowerCase();
-
-  if (!identifier) {
-    alert("Enter your username or email first.");
-    return;
-  }
-
-  if (identifier.includes("@")) {
-    sendResetEmail(identifier);
-    return;
-  }
-
-  db.ref("users")
-    .orderByChild("username")
-    .equalTo(identifier)
-    .once("value")
-    .then(function (snapshot) {
-      if (!snapshot.exists()) {
-        throw new Error("Username not found.");
-      }
-
-      let email = "";
-
-      snapshot.forEach(function (child) {
-        email = child.val().email;
-      });
-
-      sendResetEmail(email);
-    })
-    .catch(function (error) {
-      alert(error.message);
-    });
-}
-
-function sendResetEmail(email) {
-  auth
-    .sendPasswordResetEmail(email)
-    .then(function () {
-      alert("Password reset email sent!");
-    })
-    .catch(function (error) {
-      alert(error.message);
-    });
-}
-
-/* LOGOUT */
-function logout() {
-  auth.signOut();
-}
-
-/* PROFILE */
-function loadMyProfile() {
-  db.ref("users/" + currentUser.uid).once("value", function (snapshot) {
-    const user = snapshot.val();
-    if (!user) return;
-
-    const photo = getProfilePhoto(user.photoURL, user.name);
-
-    document.getElementById("myName").innerText = user.name;
-    document.getElementById("myPhoto").src = photo;
-
-    document.getElementById("accountPhoto").src = photo;
-    document.getElementById("accountName").innerText = user.name;
-    document.getElementById("accountUsername").innerText = user.username || "";
-    document.getElementById("accountEmail").innerText = user.email || "";
-
-    const newPhotoInput = document.getElementById("newPhotoURL");
-    if (newPhotoInput) newPhotoInput.value = user.photoURL || "";
-  });
-}
-
-function updateProfilePhoto() {
-  const newPhotoURL = document.getElementById("newPhotoURL").value.trim();
-
-  db.ref("users/" + currentUser.uid)
-    .update({
-      photoURL: newPhotoURL,
-    })
-    .then(function () {
-      alert("Profile picture updated!");
-      loadMyProfile();
-      loadContacts();
-    })
-    .catch(function (error) {
-      alert(error.message);
-    });
-}
-
-function sendPasswordReset() {
-  const email = document.getElementById("accountEmail").innerText;
-
-  if (!email) {
-    alert("Email not found.");
-    return;
-  }
-
-  sendResetEmail(email);
-}
-
-/* PANELS */
-function hideAllRightPanels() {
-  document.getElementById("emptyState").style.display = "none";
-  document.getElementById("chatContainer").style.display = "none";
-  document.getElementById("accountPanel").style.display = "none";
-}
-
-function showEmptyState() {
-  hideAllRightPanels();
-  document.getElementById("emptyState").style.display = "flex";
-}
-
-function openAccountPanel() {
-  hideAllRightPanels();
-  document.getElementById("accountPanel").style.display = "flex";
-  loadMyProfile();
-
-  if (window.innerWidth <= 768) {
-    document.getElementById("rightPanel").classList.add("active");
-  }
-}
-
-function closeAccountPanel() {
-  document.getElementById("accountPanel").style.display = "none";
-
-  if (currentChatUser) {
-    document.getElementById("chatContainer").style.display = "flex";
-  } else {
-    document.getElementById("emptyState").style.display = "flex";
-
-    if (window.innerWidth <= 768) {
-      document.getElementById("rightPanel").classList.remove("active");
+    } catch (error) {
+      console.warn("Local notification unavailable", error);
     }
   }
 }
 
-/* SEARCH */
+
+function escapeHtml(text) {
+  if (text === undefined || text === null) return "";
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function normalizeUsername(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._]/g, "");
+}
+
+function getProfilePhoto(photoURL, name) {
+  if (photoURL && String(photoURL).trim()) return photoURL.trim();
+  return (
+    "https://ui-avatars.com/api/?name=" +
+    encodeURIComponent(name || "User") +
+    "&background=0f766e&color=fff&bold=true"
+  );
+}
+
+function formatTime(timestamp) {
+  if (!timestamp) return "";
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatLastSeen(timestamp) {
+  if (!timestamp) return "Offline";
+  const date = new Date(timestamp);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  if (sameDay) return "Last seen " + formatTime(timestamp);
+  return "Last seen " + date.toLocaleDateString() + " " + formatTime(timestamp);
+}
+
+function getChatId(a, b) {
+  return a < b ? a + "_" + b : b + "_" + a;
+}
+
+function clearNode(node) {
+  while (node && node.firstChild) node.removeChild(node.firstChild);
+}
+
+function detachRef(ref) {
+  if (ref) ref.off();
+}
+
+function detachContactListeners() {
+  activeContactListeners.forEach((ref) => ref.off());
+  activeContactListeners.length = 0;
+}
+
+function hideAllRightPanels() {
+  $("emptyState").style.display = "none";
+  $("chatContainer").style.display = "none";
+  $("accountPanel").style.display = "none";
+}
+
+function showEmptyState() {
+  hideAllRightPanels();
+  $("emptyState").style.display = "flex";
+  if (window.innerWidth <= 900) $("rightPanel").classList.remove("active");
+}
+
+function showRightOnMobile() {
+  if (window.innerWidth <= 900) $("rightPanel").classList.add("active");
+}
+
+function showTab(tabId, btn) {
+  document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach((button) => button.classList.remove("active"));
+  $(tabId).classList.add("active");
+  btn.classList.add("active");
+}
+
+function setBusy(button, isBusy, text) {
+  if (!button) return;
+  if (isBusy) {
+    button.dataset.oldText = button.textContent;
+    button.textContent = text || "Please wait...";
+    button.disabled = true;
+  } else {
+    button.textContent = button.dataset.oldText || button.textContent;
+    button.disabled = false;
+  }
+}
+
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    currentUser = user;
+    $("authSection").style.display = "none";
+    $("chatSection").style.display = "flex";
+    showEmptyState();
+    loadMyProfile();
+    loadRequests();
+    loadContacts();
+    setOnlineStatus();
+    autoRegisterPushIfAllowed();
+    hideLoader();
+  } else {
+    cleanupAppListeners();
+    currentUser = null;
+    currentChatUser = null;
+    currentChatId = null;
+    $("chatSection").style.display = "none";
+    $("authSection").style.display = "flex";
+    hideLoader();
+  }
+});
+
+function cleanupAppListeners() {
+  detachRef(currentMessagesRef);
+  detachRef(currentStatusRef);
+  detachRef(currentTypingRef);
+  detachRef(requestsRef);
+  detachRef(contactsRef);
+  detachRef(myProfileRef);
+  detachRef(connectedRef);
+  detachContactListeners();
+  currentMessagesRef = null;
+  currentStatusRef = null;
+  currentTypingRef = null;
+  requestsRef = null;
+  contactsRef = null;
+  myProfileRef = null;
+  connectedRef = null;
+}
+
+function signUp() {
+  const username = normalizeUsername($("username").value);
+  const name = $("name").value.trim();
+  const photoURL = $("photoURL").value.trim();
+  const email = $("email").value.trim().toLowerCase();
+  const password = $("password").value.trim();
+
+  if (!username || username.length < 3) return showToast("Username at least 3 characters ka hona chahiye.", "error");
+  if (!name || !email || !password) return showToast("Please all required fields fill karo.", "error");
+  if (password.length < 6) return showToast("Password kam se kam 6 characters ka hona chahiye.", "error");
+
+  showLoader();
+  let createdUser = null;
+
+  // Important fix:
+  // Locked/auth-only database rules signup se pehle database write allow nahi karti.
+  // Isliye pehle Firebase Auth account create hota hai, phir logged-in user ke taur par
+  // username reserve + profile save hota hai.
+  auth.createUserWithEmailAndPassword(email, password)
+    .then((cred) => {
+      createdUser = cred.user;
+      return db.ref("usernames/" + username).transaction((current) => {
+        return current === null ? createdUser.uid : undefined;
+      });
+    })
+    .then((result) => {
+      if (!result.committed) {
+        throw new Error("Username already taken.");
+      }
+
+      const userData = {
+        uid: createdUser.uid,
+        username,
+        name,
+        email,
+        photoURL: photoURL || "",
+        createdAt: Date.now(),
+      };
+
+      const updates = {};
+      updates["users/" + createdUser.uid] = userData;
+      updates["usernames/" + username] = createdUser.uid;
+      return db.ref().update(updates);
+    })
+    .then(() => showToast("Account created successfully.", "success"))
+    .catch((error) => {
+      hideLoader();
+      const message = error && error.message ? error.message : "Signup failed.";
+
+      // Agar Auth account create hogaya lekin username/profile save nahi hua,
+      // to clean rollback ki try karte hain taake duplicate/half account na rahe.
+      if (createdUser && message !== "Username already taken.") {
+        db.ref("usernames/" + username).once("value").then((snap) => {
+          if (snap.val() === createdUser.uid) return db.ref("usernames/" + username).remove();
+        }).catch(() => {});
+      }
+      if (createdUser && message === "Username already taken.") {
+        createdUser.delete().catch(() => {});
+      }
+
+      showToast(message, "error");
+    });
+}
+
+function login() {
+  const identifier = $("loginIdentifier").value.trim().toLowerCase();
+  const password = $("loginPassword").value.trim();
+  if (!identifier || !password) return showToast("Username/email aur password enter karo.", "error");
+
+  showLoader();
+  const loginPromise = identifier.includes("@")
+    ? auth.signInWithEmailAndPassword(identifier, password)
+    : db
+        .ref("users")
+        .orderByChild("username")
+        .equalTo(normalizeUsername(identifier))
+        .once("value")
+        .then((snapshot) => {
+          if (!snapshot.exists()) throw new Error("Username not found.");
+          let email = "";
+          snapshot.forEach((child) => (email = child.val().email));
+          return auth.signInWithEmailAndPassword(email, password);
+        });
+
+  loginPromise.catch((error) => {
+    hideLoader();
+    showToast(error.message, "error");
+  });
+}
+
+function forgotPassword() {
+  const identifier = $("loginIdentifier").value.trim().toLowerCase();
+  if (!identifier) return showToast("Pehle username ya email enter karo.", "error");
+
+  const resolveEmail = identifier.includes("@")
+    ? Promise.resolve(identifier)
+    : db
+        .ref("users")
+        .orderByChild("username")
+        .equalTo(normalizeUsername(identifier))
+        .once("value")
+        .then((snapshot) => {
+          if (!snapshot.exists()) throw new Error("Username not found.");
+          let email = "";
+          snapshot.forEach((child) => (email = child.val().email));
+          return email;
+        });
+
+  resolveEmail
+    .then((email) => auth.sendPasswordResetEmail(email))
+    .then(() => showToast("Password reset email sent.", "success"))
+    .catch((error) => showToast(error.message, "error"));
+}
+
+function logout() {
+  showLoader();
+  if (currentUser) {
+    db.ref("status/" + currentUser.uid).update({ state: "offline", lastSeen: Date.now() });
+  }
+  auth.signOut().catch((error) => {
+    hideLoader();
+    showToast(error.message, "error");
+  });
+}
+
+function loadMyProfile() {
+  if (!currentUser) return;
+  detachRef(myProfileRef);
+  myProfileRef = db.ref("users/" + currentUser.uid);
+  myProfileRef.on("value", (snapshot) => {
+    const user = snapshot.val();
+    if (!user) return;
+    const photo = getProfilePhoto(user.photoURL, user.name);
+    $("myPhoto").src = photo;
+    $("myName").textContent = user.name || "My Profile";
+    $("myUsername").textContent = "@" + (user.username || "user");
+    $("accountPhoto").src = photo;
+    $("accountName").textContent = user.name || "User";
+    $("accountUsername").textContent = "@" + (user.username || "");
+    $("accountEmail").textContent = user.email || currentUser.email || "";
+    $("newPhotoURL").value = user.photoURL || "";
+  });
+}
+
+function updateProfilePhoto() {
+  const newPhotoURL = $("newPhotoURL").value.trim();
+  db.ref("users/" + currentUser.uid)
+    .update({ photoURL: newPhotoURL, updatedAt: Date.now() })
+    .then(() => showToast("Profile picture updated.", "success"))
+    .catch((error) => showToast(error.message, "error"));
+}
+
+function sendPasswordReset() {
+  const email = $("accountEmail").textContent.trim();
+  if (!email) return showToast("Email not found.", "error");
+  auth
+    .sendPasswordResetEmail(email)
+    .then(() => showToast("Password reset email sent.", "success"))
+    .catch((error) => showToast(error.message, "error"));
+}
+
+function openAccountPanel() {
+  hideAllRightPanels();
+  $("accountPanel").style.display = "flex";
+  showRightOnMobile();
+}
+
+function closeAccountPanel() {
+  if (currentChatUser) {
+    hideAllRightPanels();
+    $("chatContainer").style.display = "flex";
+    showRightOnMobile();
+  } else {
+    showEmptyState();
+  }
+}
+
 function searchUser() {
-  const keyword = document.getElementById("searchInput").value.trim().toLowerCase();
-  const resultDiv = document.getElementById("searchResult");
-
-  resultDiv.innerHTML = "";
-
+  const keyword = $("searchInput").value.trim().toLowerCase();
+  const resultDiv = $("searchResult");
+  clearNode(resultDiv);
   if (!keyword) return;
+  resultDiv.innerHTML = '<div class="empty-small">Searching...</div>';
 
   db.ref("users")
     .once("value")
-    .then(function (snapshot) {
-      let found = false;
-
-      snapshot.forEach(function (child) {
-        const user = child.val();
+    .then((snapshot) => {
+      clearNode(resultDiv);
+      const matches = [];
+      snapshot.forEach((child) => {
         const uid = child.key;
-
-        if (uid === currentUser.uid) return;
-
+        const user = child.val();
+        if (!user || uid === currentUser.uid) return;
         const username = (user.username || "").toLowerCase();
-        if (!username.includes(keyword)) return;
-
-        found = true;
-
-        const div = document.createElement("div");
-        div.className = "search-item";
-
-        div.innerHTML = `
-          <strong>${escapeHtml(user.name)}</strong><br>
-          <small>@${escapeHtml(user.username)}</small>
-          <div class="item-actions">
-            <button disabled>Loading...</button>
-          </div>
-        `;
-
-        resultDiv.appendChild(div);
-
-        const actionContainer = div.querySelector(".item-actions");
-
-        db.ref("contacts/" + currentUser.uid + "/" + uid)
-          .once("value")
-          .then(function (contactSnap) {
-            if (contactSnap.exists()) {
-              actionContainer.innerHTML =
-                `<button disabled style="background:#28a745;color:white;">Friend Added</button>`;
-              return;
-            }
-
-            db.ref("requests/" + uid + "/" + currentUser.uid)
-              .once("value")
-              .then(function (requestSnap) {
-                if (requestSnap.exists()) {
-                  actionContainer.innerHTML =
-                    `<button disabled style="background:#6c757d;color:white;">Request Sent</button>`;
-                } else {
-                  actionContainer.innerHTML =
-                    `<button class="add-btn" onclick="sendRequest('${uid}')">Add</button>`;
-                }
-              });
-          });
+        const name = (user.name || "").toLowerCase();
+        if (username.includes(keyword) || name.includes(keyword)) {
+          matches.push({ uid, user });
+        }
       });
 
-      if (!found) {
-        resultDiv.innerHTML = `<div class="search-item">No user found</div>`;
+      if (!matches.length) {
+        resultDiv.innerHTML = '<div class="empty-small">No user found</div>';
+        return;
       }
+      matches.slice(0, 10).forEach(({ uid, user }) => renderSearchItem(uid, user));
+    })
+    .catch((error) => {
+      resultDiv.innerHTML = '<div class="empty-small">Search failed</div>';
+      showToast(error.message, "error");
     });
 }
 
-/* REQUESTS */
+function renderSearchItem(uid, user) {
+  const div = document.createElement("div");
+  div.className = "search-item";
+  div.innerHTML = `
+    <div class="item-head">
+      <img src="${escapeHtml(getProfilePhoto(user.photoURL, user.name))}" class="contact-pic" alt="">
+      <div><strong>${escapeHtml(user.name)}</strong><small>@${escapeHtml(user.username || "")}</small></div>
+    </div>
+    <div class="item-actions"><button class="disabled-btn" disabled>Checking...</button></div>
+  `;
+  $("searchResult").appendChild(div);
+  const actions = div.querySelector(".item-actions");
+  Promise.all([
+    db.ref("contacts/" + currentUser.uid + "/" + uid).once("value"),
+    db.ref("requests/" + uid + "/" + currentUser.uid).once("value"),
+    db.ref("requests/" + currentUser.uid + "/" + uid).once("value"),
+  ]).then(([contactSnap, sentSnap, receivedSnap]) => {
+    if (contactSnap.exists()) {
+      actions.innerHTML = '<button class="disabled-btn" disabled>Already Added</button>';
+    } else if (sentSnap.exists()) {
+      actions.innerHTML = '<button class="disabled-btn" disabled>Request Sent</button>';
+    } else if (receivedSnap.exists()) {
+      actions.innerHTML = `<button class="accept-btn" onclick="acceptRequest('${uid}')">Accept Request</button>`;
+    } else {
+      actions.innerHTML = `<button class="add-btn" onclick="sendRequest('${uid}')">Add Contact</button>`;
+    }
+  });
+}
+
 function sendRequest(toUid) {
-  db.ref("users/" + currentUser.uid)
-    .once("value")
-    .then(function (snapshot) {
-      const myData = snapshot.val();
+  if (!currentUser || toUid === currentUser.uid) return;
+  Promise.all([
+    db.ref("users/" + currentUser.uid).once("value"),
+    db.ref("contacts/" + currentUser.uid + "/" + toUid).once("value"),
+  ])
+    .then(([mySnap, contactSnap]) => {
+      if (contactSnap.exists()) throw new Error("This user is already in your contacts.");
+
+      // Firebase Realtime Database undefined values accept nahi karta.
+      // Purane accounts me username/name missing ho sakta hai, isliye safe fallbacks zaroori hain.
+      const myData = mySnap.val() || {};
+      const safeName = myData.name || currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "User");
+      const safeUsername = myData.username || (currentUser.email ? currentUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "") : "user");
 
       return db.ref("requests/" + toUid + "/" + currentUser.uid).set({
         fromUid: currentUser.uid,
-        fromName: myData.name,
-        fromUsername: myData.username,
+        fromName: safeName,
+        fromUsername: safeUsername,
         fromPhotoURL: myData.photoURL || "",
+        timestamp: Date.now(),
       });
     })
-    .then(function () {
+    .then(() => {
+      showToast("Request sent.", "success");
       searchUser();
-    });
+    })
+    .catch((error) => showToast(error.message, "error"));
 }
 
 function loadRequests() {
-  const requestList = document.getElementById("requestList");
-
-  db.ref("requests/" + currentUser.uid).on("value", function (snapshot) {
-    requestList.innerHTML = "";
-
-    snapshot.forEach(function (child) {
+  const requestList = $("requestList");
+  detachRef(requestsRef);
+  requestsRef = db.ref("requests/" + currentUser.uid);
+  requestsRef.on("value", (snapshot) => {
+    clearNode(requestList);
+    if (!snapshot.exists()) {
+      requestList.className = "list-content empty-small";
+      requestList.textContent = "No requests";
+      return;
+    }
+    requestList.className = "list-content";
+    snapshot.forEach((child) => {
       const req = child.val();
       const fromUid = child.key;
-      const photo = getProfilePhoto(req.fromPhotoURL, req.fromName);
-
       const div = document.createElement("div");
       div.className = "request-item";
-
       div.innerHTML = `
-        <div style="display:flex;align-items:center;gap:10px;">
-          <img src="${photo}" class="contact-pic" />
-          <div>
-            <strong>${escapeHtml(req.fromName)}</strong><br>
-            <small>@${escapeHtml(req.fromUsername || "")}</small>
-          </div>
+        <div class="item-head">
+          <img src="${escapeHtml(getProfilePhoto(req.fromPhotoURL, req.fromName))}" class="contact-pic" alt="">
+          <div><strong>${escapeHtml(req.fromName || "User")}</strong><small>@${escapeHtml(req.fromUsername || "")}</small></div>
         </div>
-
         <div class="item-actions">
           <button class="accept-btn" onclick="acceptRequest('${fromUid}')">Accept</button>
           <button class="reject-btn" onclick="rejectRequest('${fromUid}')">Reject</button>
-        </div>
-      `;
-
+        </div>`;
       requestList.appendChild(div);
     });
   });
@@ -430,560 +623,367 @@ function acceptRequest(fromUid) {
     db.ref("users/" + currentUser.uid).once("value"),
     db.ref("users/" + fromUid).once("value"),
   ])
-    .then(function ([mySnap, senderSnap]) {
-      const myData = mySnap.val();
-      const senderData = senderSnap.val();
-
+    .then(([mySnap, senderSnap]) => {
+      const myData = mySnap.val() || {};
+      const senderData = senderSnap.val() || {};
+      if (!senderSnap.exists()) throw new Error("User not found.");
+      const mySafeName = myData.name || currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "User");
+      const senderSafeName = senderData.name || "User";
       const updates = {};
-
       updates["contacts/" + currentUser.uid + "/" + fromUid] = {
         uid: fromUid,
-        name: senderData.name,
+        name: senderSafeName,
         username: senderData.username || "",
         photoURL: senderData.photoURL || "",
+        addedAt: Date.now(),
       };
-
       updates["contacts/" + fromUid + "/" + currentUser.uid] = {
         uid: currentUser.uid,
-        name: myData.name,
+        name: mySafeName,
         username: myData.username || "",
         photoURL: myData.photoURL || "",
+        addedAt: Date.now(),
       };
-
       updates["requests/" + currentUser.uid + "/" + fromUid] = null;
-
+      updates["requests/" + fromUid + "/" + currentUser.uid] = null;
       return db.ref().update(updates);
     })
-    .then(function () {
-      document.getElementById("searchInput").value = "";
-      document.getElementById("searchResult").innerHTML = "";
-    });
+    .then(() => {
+      showToast("Contact added.", "success");
+      $("searchInput").value = "";
+      $("searchResult").innerHTML = "";
+    })
+    .catch((error) => showToast(error.message, "error"));
 }
 
 function rejectRequest(fromUid) {
-  db.ref("requests/" + currentUser.uid + "/" + fromUid).remove();
+  db.ref("requests/" + currentUser.uid + "/" + fromUid)
+    .remove()
+    .then(() => showToast("Request rejected.", "success"))
+    .catch((error) => showToast(error.message, "error"));
 }
 
-/* CONTACTS */
 function loadContacts() {
-  const userList = document.getElementById("userList");
-
-  db.ref("contacts/" + currentUser.uid).on("value", function (snapshot) {
-    userList.innerHTML = "";
-
-    snapshot.forEach(function (child) {
+  const userList = $("userList");
+  detachRef(contactsRef);
+  detachContactListeners();
+  contactsRef = db.ref("contacts/" + currentUser.uid);
+  contactsRef.on("value", (snapshot) => {
+    clearNode(userList);
+    detachContactListeners();
+    if (!snapshot.exists()) {
+      userList.className = "list-content empty-small";
+      userList.textContent = "No contacts yet";
+      return;
+    }
+    userList.className = "list-content";
+    snapshot.forEach((child) => {
       const contact = child.val();
-
-      db.ref("users/" + contact.uid).once("value", function (userSnap) {
-        const userData = userSnap.val();
-        if (!userData) return;
-
-        const photo = getProfilePhoto(userData.photoURL, userData.name);
-        const chatId = getChatId(currentUser.uid, contact.uid);
-
-        const div = document.createElement("div");
-        div.className = "contact-item";
-        div.id = "contact-" + contact.uid;
-
-        div.innerHTML = `
-          <div class="contact-pic-wrapper">
-            <img src="${photo}" class="contact-pic">
-            <span class="status-dot" id="status-${contact.uid}"></span>
-          </div>
-
-          <div class="contact-info">
-            <div class="contact-top">
-              <strong>${escapeHtml(userData.name)}</strong>
-
-              <span class="unread-badge"
-                id="unread-${contact.uid}"
-                style="display:none;">
-                0
-              </span>
-            </div>
-
-            <div class="contact-bottom">
-              <div class="last-message" id="lastMsg-${contact.uid}">
-                No messages yet
-              </div>
-
-              <span class="last-msg-time" id="lastTime-${contact.uid}"></span>
-            </div>
-          </div>
-        `;
-
-        div.onclick = function () {
-          openChat(contact.uid, userData.name, userData.photoURL || "");
-        };
-
-        userList.appendChild(div);
-
-        db.ref("status/" + contact.uid).on("value", function (statusSnap) {
-          const dot = document.getElementById("status-" + contact.uid);
-          if (!dot) return;
-
-          const status = statusSnap.val();
-
-          if (status && status.state === "online") {
-            dot.classList.add("online");
-            dot.classList.remove("offline");
-          } else {
-            dot.classList.add("offline");
-            dot.classList.remove("online");
-          }
-        });
-
-        db.ref("lastMessages/" + chatId).on("value", function (lastSnap) {
-          const lastMsgDiv = document.getElementById("lastMsg-" + contact.uid);
-          const lastTimeDiv = document.getElementById("lastTime-" + contact.uid);
-
-          if (!lastMsgDiv || !lastTimeDiv) return;
-
-          if (!lastSnap.exists()) {
-            lastMsgDiv.innerText = "No messages yet";
-            lastTimeDiv.innerText = "";
-            return;
-          }
-
-          const msg = lastSnap.val();
-
-          if (msg.senderId !== currentUser.uid) {
-            markChatAsDelivered(chatId);
-          }
-
-          const prefix = msg.senderId === currentUser.uid ? "You: " : "";
-          let preview = msg.text || "";
-
-          if (preview.length > 30) {
-            preview = preview.slice(0, 30) + "...";
-          }
-
-          const time = new Date(msg.timestamp).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          lastMsgDiv.innerText = prefix + preview;
-          lastTimeDiv.innerText = time;
-        });
-
-        db.ref("unread/" + currentUser.uid + "/" + chatId).on(
-          "value",
-          function (unreadSnap) {
-            const badge = document.getElementById("unread-" + contact.uid);
-            if (!badge) return;
-
-            const count = unreadSnap.val();
-
-            if (count && count > 0) {
-              badge.innerText = count;
-              badge.style.display = "inline-flex";
-            } else {
-              badge.innerText = "0";
-              badge.style.display = "none";
-            }
-          }
-        );
-      });
+      if (!contact || !contact.uid) return;
+      renderContact(contact.uid);
     });
   });
 }
 
-/* DELIVERED */
-function markChatAsDelivered(chatId) {
-  if (!currentUser) return;
+function renderContact(uid) {
+  db.ref("users/" + uid).once("value", (userSnap) => {
+    const user = userSnap.val();
+    if (!user) return;
+    const chatId = getChatId(currentUser.uid, uid);
+    const div = document.createElement("div");
+    div.className = "contact-item";
+    div.id = "contact-" + uid;
+    div.innerHTML = `
+      <div class="contact-pic-wrapper">
+        <img src="${escapeHtml(getProfilePhoto(user.photoURL, user.name))}" class="contact-pic" alt="">
+        <span class="status-dot" id="status-${uid}"></span>
+      </div>
+      <div class="contact-info">
+        <div class="contact-top">
+          <strong>${escapeHtml(user.name || "User")}</strong>
+          <span class="unread-badge" id="unread-${uid}">0</span>
+        </div>
+        <div class="contact-bottom">
+          <span class="last-message" id="lastMsg-${uid}">No messages yet</span>
+          <span class="last-msg-time" id="lastTime-${uid}"></span>
+        </div>
+      </div>`;
+    div.onclick = () => openChat(uid, user.name || "User", user.photoURL || "");
+    $("userList").appendChild(div);
 
-  db.ref("chats/" + chatId + "/messages")
-    .once("value")
-    .then(function (snapshot) {
-      const updates = {};
-
-      snapshot.forEach(function (child) {
-        const msg = child.val();
-        const messageId = child.key;
-
-        if (msg.senderId !== currentUser.uid && msg.delivered !== true) {
-          updates["chats/" + chatId + "/messages/" + messageId + "/delivered"] = true;
-        }
-      });
-
-      if (Object.keys(updates).length > 0) {
-        return db.ref().update(updates);
-      }
+    const statusRef = db.ref("status/" + uid);
+    activeContactListeners.push(statusRef);
+    statusRef.on("value", (snap) => {
+      const dot = $("status-" + uid);
+      if (!dot) return;
+      dot.classList.toggle("online", snap.val() && snap.val().state === "online");
     });
+
+    const lastRef = db.ref("lastMessages/" + chatId);
+    activeContactListeners.push(lastRef);
+    lastRef.on("value", (snap) => {
+      const lastMsgDiv = $("lastMsg-" + uid);
+      const lastTimeDiv = $("lastTime-" + uid);
+      if (!lastMsgDiv || !lastTimeDiv) return;
+      if (!snap.exists()) {
+        lastMsgDiv.textContent = "No messages yet";
+        lastTimeDiv.textContent = "";
+        return;
+      }
+      const msg = snap.val();
+      if (msg.senderId !== currentUser.uid) {
+        markChatAsDelivered(chatId);
+        const isFirstLoad = lastAlertTimestamps[chatId] === undefined;
+        const lastSeenAlert = lastAlertTimestamps[chatId] || 0;
+        const isOpenChat = currentChatId === chatId;
+        if (isFirstLoad) {
+          lastAlertTimestamps[chatId] = msg.timestamp || Date.now();
+        } else if (msg.timestamp && msg.timestamp > lastSeenAlert && (!isOpenChat || document.hidden)) {
+          lastAlertTimestamps[chatId] = msg.timestamp;
+          showLocalMessageAlert(msg.senderName || user.name || "New message", msg.deleted ? "This message was deleted" : msg.text || "New message");
+        }
+      }
+      const prefix = msg.senderId === currentUser.uid ? "You: " : "";
+      const preview = msg.deleted ? "This message was deleted" : msg.text || "";
+      lastMsgDiv.textContent = prefix + preview;
+      lastTimeDiv.textContent = formatTime(msg.timestamp);
+    });
+
+    const unreadRef = db.ref("unread/" + currentUser.uid + "/" + chatId);
+    activeContactListeners.push(unreadRef);
+    unreadRef.on("value", (snap) => {
+      const badge = $("unread-" + uid);
+      if (!badge) return;
+      const count = snap.val() || 0;
+      badge.textContent = count;
+      badge.style.display = count > 0 ? "inline-flex" : "none";
+    });
+  });
 }
 
-/* OPEN CHAT */
 function openChat(uid, name, photoURL = "") {
   currentChatUser = uid;
   currentChatUserName = name;
+  currentChatId = getChatId(currentUser.uid, uid);
+  replyMessage = null;
+  editingMessageId = null;
+  editingChatId = null;
+  cancelReply(false);
 
-  const chatId = getChatId(currentUser.uid, uid);
-  currentChatId = chatId;
+  document.querySelectorAll(".contact-item").forEach((item) => item.classList.remove("active"));
+  const active = $("contact-" + uid);
+  if (active) active.classList.add("active");
 
-  db.ref("unread/" + currentUser.uid + "/" + chatId).remove();
-
-  const photo = getProfilePhoto(photoURL, name);
-
+  db.ref("unread/" + currentUser.uid + "/" + currentChatId).remove();
   hideAllRightPanels();
-
-  document.getElementById("chatPhoto").src = photo;
-  document.getElementById("chatWithName").innerText = name;
-
-  document.getElementById("chatContainer").style.display = "flex";
-  document.getElementById("chatContainer").style.flexDirection = "column";
-
-  if (window.innerWidth <= 768) {
-    document.getElementById("rightPanel").classList.add("active");
-  }
-
+  $("chatPhoto").src = getProfilePhoto(photoURL, name);
+  $("chatWithName").textContent = name;
+  $("chatContainer").style.display = "flex";
+  showRightOnMobile();
   listenChatStatus(uid);
   listenTypingStatus(uid);
   loadMessages();
-
-  setTimeout(function () {
-    markCurrentChatAsSeen();
-  }, 300);
+  setTimeout(markCurrentChatAsSeen, 300);
 }
 
-/* BACK */
 function goBack() {
+  detachRef(currentMessagesRef);
+  detachRef(currentStatusRef);
+  detachRef(currentTypingRef);
+  currentMessagesRef = null;
+  currentStatusRef = null;
+  currentTypingRef = null;
   currentChatUser = null;
   currentChatUserName = "";
   currentChatId = null;
-
-  if (currentMessagesRef) {
-    currentMessagesRef.off();
-    currentMessagesRef = null;
-  }
-
-  if (currentStatusRef) {
-    currentStatusRef.off();
-    currentStatusRef = null;
-  }
-
-  if (currentTypingRef) {
-    currentTypingRef.off();
-    currentTypingRef = null;
-  }
-
-  hideAllRightPanels();
-  document.getElementById("emptyState").style.display = "flex";
-
-  if (window.innerWidth <= 768) {
-    document.getElementById("rightPanel").classList.remove("active");
-  }
+  replyMessage = null;
+  editingMessageId = null;
+  editingChatId = null;
+  document.querySelectorAll(".contact-item").forEach((item) => item.classList.remove("active"));
+  showEmptyState();
 }
 
-/* CHAT ID */
-function getChatId(a, b) {
-  return a < b ? a + "_" + b : b + "_" + a;
-}
-
-/* SEND MESSAGE */
 function sendMessage() {
-  const input = document.getElementById("messageInput");
+  const input = $("messageInput");
   const text = input.value.trim();
-
   if (!text || !currentChatUser) return;
-
-  db.ref("users/" + currentUser.uid).once("value", function (snapshot) {
-    const me = snapshot.val();
-    const chatId = getChatId(currentUser.uid, currentChatUser);
+  const chatId = getChatId(currentUser.uid, currentChatUser);
+  db.ref("users/" + currentUser.uid).once("value", (snapshot) => {
+    const me = snapshot.val() || { name: "Me" };
     const newMsgRef = db.ref("chats/" + chatId + "/messages").push();
-
+    const timestamp = Date.now();
     const messageData = {
       messageId: newMsgRef.key,
       senderId: currentUser.uid,
-      senderName: me.name,
-      text: text,
-      timestamp: Date.now(),
+      senderName: me.name || "Me",
+      text,
+      timestamp,
       delivered: false,
       seen: false,
       edited: false,
       deleted: false,
+      notify: true,
+      receiverId: currentChatUser,
     };
-
     if (replyMessage) {
       messageData.replyTo = {
-        senderName: replyMessage.senderName,
-        text: replyMessage.text,
+        senderName: replyMessage.senderName || "User",
+        text: replyMessage.text || "",
       };
     }
-
     const updates = {};
-
     updates["chats/" + chatId + "/messages/" + newMsgRef.key] = messageData;
-
     updates["lastMessages/" + chatId] = {
       messageId: newMsgRef.key,
       senderId: currentUser.uid,
-      senderName: me.name,
-      text: text,
-      timestamp: messageData.timestamp,
+      senderName: me.name || "Me",
+      text,
+      timestamp,
+      deleted: false,
     };
-
-    updates["unread/" + currentChatUser + "/" + chatId] =
-      firebase.database.ServerValue.increment(1);
-
-    db.ref()
-      .update(updates)
-      .then(function () {
-        input.value = "";
-        cancelReply();
-      });
+    updates["unread/" + currentChatUser + "/" + chatId] = firebase.database.ServerValue.increment(1);
+    db.ref().update(updates).then(() => {
+      input.value = "";
+      cancelReply(false);
+      db.ref("typing/" + chatId + "/" + currentUser.uid).remove();
+    });
   });
 }
 
-/* REPLY */
-function replyToMessage(msg, messageId) {
-  replyMessage = {
-    senderName: msg.senderName,
-    text: msg.text,
-  };
-
-  document.getElementById("replyPreview").style.display = "flex";
-  document.getElementById("replyName").innerText = msg.senderName;
-  document.getElementById("replyText").innerText = msg.text;
-
-  const menu = document.getElementById("msgMenu-" + messageId);
-  if (menu) menu.classList.remove("show");
-
-  document.getElementById("messageInput").focus();
-}
-
-function cancelReply() {
-  replyMessage = null;
-
-  document.getElementById("replyPreview").style.display = "none";
-  document.getElementById("replyName").innerText = "";
-  document.getElementById("replyText").innerText = "";
-}
-
-/* LOAD MESSAGES */
 function loadMessages() {
-  const messages = document.getElementById("messages");
-  const chatId = getChatId(currentUser.uid, currentChatUser);
-
-  if (currentMessagesRef) {
-    currentMessagesRef.off();
-  }
-
+  const messages = $("messages");
+  const chatId = currentChatId;
+  detachRef(currentMessagesRef);
   currentMessagesRef = db.ref("chats/" + chatId + "/messages");
-
-  currentMessagesRef.on("value", function (snapshot) {
-    messages.innerHTML = "";
-
-    snapshot.forEach(function (child) {
+  currentMessagesRef.on("value", (snapshot) => {
+    clearNode(messages);
+    if (!snapshot.exists()) {
+      const empty = document.createElement("div");
+      empty.className = "empty-small";
+      empty.textContent = "No messages yet. Say hello 👋";
+      messages.appendChild(empty);
+    }
+    snapshot.forEach((child) => {
       const msg = child.val();
       const messageId = child.key;
-
-      const time = new Date(msg.timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      const div = document.createElement("div");
-      div.className = "message";
-
-      if (msg.senderId === currentUser.uid) {
-        div.classList.add("self");
-      }
-
-      let replyHTML = "";
-
-      if (msg.replyTo && !msg.deleted) {
-        replyHTML = `
-          <div class="replied-message">
-            <strong>${escapeHtml(msg.replyTo.senderName)}</strong>
-            <p>${escapeHtml(msg.replyTo.text)}</p>
-          </div>
-        `;
-      }
-
-      let tickSymbol = "✓";
-      let tickClass = "";
-
-      if (msg.seen === true) {
-        tickSymbol = "✓✓";
-        tickClass = "seen";
-      } else if (msg.delivered === true) {
-        tickSymbol = "✓✓";
-      }
-
-      const ticksHTML =
-        msg.senderId === currentUser.uid
-          ? `<span class="ticks ${tickClass}">${tickSymbol}</span>`
-          : "";
-
-      let messageBodyHTML = "";
-
-      if (msg.deleted) {
-        messageBodyHTML = `
-          <div class="deleted-text">
-            This message was deleted
-          </div>
-        `;
-      } else if (editingMessageId === messageId && editingChatId === chatId) {
-        messageBodyHTML = `
-          <div class="edit-message-box">
-            <input
-              type="text"
-              id="editInput-${messageId}"
-              class="edit-message-input"
-              value="${escapeHtml(msg.text)}"
-            />
-
-            <div class="edit-actions">
-              <button onclick="saveEditedMessage('${chatId}', '${messageId}')">
-                Save
-              </button>
-
-              <button class="cancel-edit-btn" onclick="cancelEditMessage()">
-                Cancel
-              </button>
-            </div>
-          </div>
-        `;
-      } else {
-        messageBodyHTML = `
-          <div>
-            ${escapeHtml(msg.text)}
-            ${
-              msg.edited
-                ? `<span class="edited-label">edited</span>`
-                : ""
-            }
-          </div>
-        `;
-      }
-
-      let menuHTML = "";
-
-      if (!msg.deleted) {
-        menuHTML = `
-          <div class="msg-menu-wrap">
-            <button class="msg-dots" onclick="toggleMessageMenu('${messageId}')">⋮</button>
-
-            <div id="msgMenu-${messageId}" class="msg-menu">
-              <button onclick="replyToMessageById('${chatId}', '${messageId}')">
-                Reply
-              </button>
-
-              ${
-                msg.senderId === currentUser.uid
-                  ? `<button onclick="startEditMessage('${chatId}', '${messageId}')">
-                      Edit
-                    </button>`
-                  : ""
-              }
-
-              ${
-                msg.senderId === currentUser.uid
-                  ? `<button class="delete-menu-btn" onclick="deleteMessageForEveryone('${chatId}', '${messageId}')">
-                      Delete for everyone
-                    </button>`
-                  : ""
-              }
-            </div>
-          </div>
-        `;
-      }
-
-      div.innerHTML = `
-        <div class="msg-wrapper">
-          <div class="bubble">
-            ${replyHTML}
-
-            <div class="sender">
-              ${escapeHtml(msg.senderName)}
-            </div>
-
-            ${messageBodyHTML}
-
-            <div class="message-meta">
-              <span class="msg-time">${time}</span>
-              ${ticksHTML}
-            </div>
-          </div>
-
-          ${menuHTML}
-        </div>
-      `;
-
-      messages.appendChild(div);
+      if (msg.deletedFor && msg.deletedFor[currentUser.uid]) return;
+      messages.appendChild(renderMessage(chatId, messageId, msg));
     });
-
     messages.scrollTop = messages.scrollHeight;
-
-    if (currentChatId === chatId && currentChatUser && !document.hidden) {
-      markCurrentChatAsSeen();
-    }
+    if (currentChatId === chatId && currentChatUser && !document.hidden) markCurrentChatAsSeen();
   });
 }
 
-/* MESSAGE MENU */
-function toggleMessageMenu(messageId) {
-  document.querySelectorAll(".msg-menu").forEach(function (menu) {
-    if (menu.id !== "msgMenu-" + messageId) {
-      menu.classList.remove("show");
-    }
-  });
+function renderMessage(chatId, messageId, msg) {
+  const div = document.createElement("div");
+  div.className = "message" + (msg.senderId === currentUser.uid ? " self" : "");
+  const isMine = msg.senderId === currentUser.uid;
 
-  const menu = document.getElementById("msgMenu-" + messageId);
-  if (menu) {
-    menu.classList.toggle("show");
+  let replyHTML = "";
+  if (msg.replyTo && !msg.deleted) {
+    replyHTML = `<div class="replied-message"><strong>${escapeHtml(msg.replyTo.senderName)}</strong><p>${escapeHtml(msg.replyTo.text)}</p></div>`;
   }
+
+  let bodyHTML = "";
+  if (msg.deleted) {
+    bodyHTML = '<div class="deleted-text">This message was deleted</div>';
+  } else if (editingMessageId === messageId && editingChatId === chatId) {
+    bodyHTML = `
+      <div class="edit-message-box">
+        <input type="text" id="editInput" class="edit-message-input" value="${escapeHtml(msg.text)}">
+        <div class="edit-actions">
+          <button type="button" onclick="saveEditedMessage()">Save</button>
+          <button type="button" class="cancel-edit-btn" onclick="cancelEditMessage()">Cancel</button>
+        </div>
+      </div>`;
+  } else {
+    bodyHTML = `<div class="message-text">${escapeHtml(msg.text)}${msg.edited ? '<span class="edited-label">edited</span>' : ""}</div>`;
+  }
+
+  let tickSymbol = "✓";
+  let tickClass = "";
+  if (msg.seen) {
+    tickSymbol = "✓✓";
+    tickClass = "seen";
+  } else if (msg.delivered) {
+    tickSymbol = "✓✓";
+  }
+  const ticksHTML = isMine ? `<span class="ticks ${tickClass}">${tickSymbol}</span>` : "";
+
+  const menuHTML = msg.deleted
+    ? ""
+    : `<div class="msg-menu-wrap">
+        <button class="msg-dots" type="button" onclick="toggleMessageMenu('${messageId}')">⋮</button>
+        <div id="msgMenu-${messageId}" class="msg-menu">
+          <button type="button" onclick="replyToMessageById('${chatId}', '${messageId}')">Reply</button>
+          ${isMine ? `<button type="button" onclick="startEditMessage('${chatId}', '${messageId}')">Edit</button>` : ""}
+          <button type="button" onclick="deleteMessageForMe('${chatId}', '${messageId}')">Delete for me</button>
+          ${isMine ? `<button type="button" class="delete-menu-btn" onclick="deleteMessageForEveryone('${chatId}', '${messageId}')">Delete for everyone</button>` : ""}
+        </div>
+      </div>`;
+
+  div.innerHTML = `
+    <div class="msg-wrapper">
+      <div class="bubble">
+        ${replyHTML}
+        <div class="sender">${escapeHtml(msg.senderName || "User")}</div>
+        ${bodyHTML}
+        <div class="message-meta"><span>${formatTime(msg.timestamp)}</span>${ticksHTML}</div>
+      </div>
+      ${menuHTML}
+    </div>`;
+  return div;
 }
 
-document.addEventListener("click", function (e) {
-  if (
-    !e.target.classList.contains("msg-dots") &&
-    !e.target.closest(".msg-menu")
-  ) {
-    document.querySelectorAll(".msg-menu").forEach(function (menu) {
-      menu.classList.remove("show");
-    });
+function toggleMessageMenu(messageId) {
+  document.querySelectorAll(".msg-menu").forEach((menu) => {
+    if (menu.id !== "msgMenu-" + messageId) menu.classList.remove("show");
+  });
+  const menu = $("msgMenu-" + messageId);
+  if (menu) menu.classList.toggle("show");
+}
+
+document.addEventListener("click", (e) => {
+  if (!e.target.classList.contains("msg-dots") && !e.target.closest(".msg-menu")) {
+    document.querySelectorAll(".msg-menu").forEach((menu) => menu.classList.remove("show"));
   }
 });
 
-/* REPLY BY ID */
 function replyToMessageById(chatId, messageId) {
-  db.ref("chats/" + chatId + "/messages/" + messageId)
-    .once("value")
-    .then(function (snapshot) {
-      const msg = snapshot.val();
-
-      if (!msg || msg.deleted) return;
-
-      replyToMessage(msg, messageId);
-    });
+  db.ref("chats/" + chatId + "/messages/" + messageId).once("value", (snapshot) => {
+    const msg = snapshot.val();
+    if (!msg || msg.deleted) return;
+    replyMessage = { senderName: msg.senderName, text: msg.text };
+    $("replyPreview").style.display = "flex";
+    $("replyName").textContent = msg.senderName || "User";
+    $("replyText").textContent = msg.text || "";
+    const menu = $("msgMenu-" + messageId);
+    if (menu) menu.classList.remove("show");
+    $("messageInput").focus();
+  });
 }
 
-/* EDIT MESSAGE INLINE */
+function cancelReply(clear = true) {
+  replyMessage = null;
+  if ($("replyPreview")) $("replyPreview").style.display = "none";
+  if (clear && $("messageInput")) $("messageInput").focus();
+}
+
 function startEditMessage(chatId, messageId) {
   editingChatId = chatId;
   editingMessageId = messageId;
-
-  document.querySelectorAll(".msg-menu").forEach(function (menu) {
-    menu.classList.remove("show");
-  });
-
+  document.querySelectorAll(".msg-menu").forEach((menu) => menu.classList.remove("show"));
   loadMessages();
-
-  setTimeout(function () {
-    const input = document.getElementById("editInput-" + messageId);
-    if (input) {
-      input.focus();
-      input.select();
-
-      input.addEventListener("keypress", function (e) {
-        if (e.key === "Enter") {
-          saveEditedMessage(chatId, messageId);
-        }
-      });
-    }
-  }, 200);
+  setTimeout(() => {
+    const input = $("editInput");
+    if (!input) return;
+    input.focus();
+    input.select();
+    input.onkeydown = (e) => {
+      if (e.key === "Enter") saveEditedMessage();
+      if (e.key === "Escape") cancelEditMessage();
+    };
+  }, 80);
 }
 
 function cancelEditMessage() {
@@ -992,210 +992,149 @@ function cancelEditMessage() {
   loadMessages();
 }
 
-function saveEditedMessage(chatId, messageId) {
-  const input = document.getElementById("editInput-" + messageId);
-  if (!input) return;
-
+function saveEditedMessage() {
+  const input = $("editInput");
+  if (!editingChatId || !editingMessageId || !input) return showToast("Edit message not found.", "error");
   const updatedText = input.value.trim();
-
-  if (!updatedText) {
-    alert("Message can't be empty.");
-    return;
-  }
-
+  if (!updatedText) return showToast("Message empty nahi ho sakta.", "error");
+  const chatId = editingChatId;
+  const messageId = editingMessageId;
   const updates = {};
-
   updates["chats/" + chatId + "/messages/" + messageId + "/text"] = updatedText;
   updates["chats/" + chatId + "/messages/" + messageId + "/edited"] = true;
-
-  db.ref("lastMessages/" + chatId).once("value", function (snapshot) {
+  db.ref("lastMessages/" + chatId).once("value", (snapshot) => {
     const lastMsg = snapshot.val();
-
-    if (lastMsg && lastMsg.messageId === messageId) {
-      updates["lastMessages/" + chatId + "/text"] = updatedText;
-    }
-
-    db.ref()
-      .update(updates)
-      .then(function () {
-        editingChatId = null;
-        editingMessageId = null;
-      });
+    if (lastMsg && lastMsg.messageId === messageId) updates["lastMessages/" + chatId + "/text"] = updatedText;
+    db.ref().update(updates).then(() => {
+      editingChatId = null;
+      editingMessageId = null;
+      showToast("Message updated.", "success");
+    });
   });
 }
 
-/* DELETE MESSAGE */
+function deleteMessageForMe(chatId, messageId) {
+  if (!confirm("Delete this message only for you?")) return;
+  db.ref("chats/" + chatId + "/messages/" + messageId + "/deletedFor/" + currentUser.uid)
+    .set(true)
+    .then(() => showToast("Deleted for you.", "success"))
+    .catch((error) => showToast(error.message, "error"));
+}
+
 function deleteMessageForEveryone(chatId, messageId) {
-  const confirmDelete = confirm("Delete this message for everyone?");
-
-  if (!confirmDelete) return;
-
+  if (!confirm("Delete this message for everyone?")) return;
   const updates = {};
-
   updates["chats/" + chatId + "/messages/" + messageId + "/deleted"] = true;
   updates["chats/" + chatId + "/messages/" + messageId + "/text"] = "";
   updates["chats/" + chatId + "/messages/" + messageId + "/replyTo"] = null;
-
-  db.ref("lastMessages/" + chatId).once("value", function (snapshot) {
+  db.ref("lastMessages/" + chatId).once("value", (snapshot) => {
     const lastMsg = snapshot.val();
-
     if (lastMsg && lastMsg.messageId === messageId) {
       updates["lastMessages/" + chatId + "/text"] = "This message was deleted";
+      updates["lastMessages/" + chatId + "/deleted"] = true;
     }
-
-    db.ref().update(updates);
+    db.ref().update(updates).then(() => showToast("Deleted for everyone.", "success"));
   });
 }
 
-/* SEEN */
-function markCurrentChatAsSeen() {
-  if (!currentUser || !currentChatUser || !currentChatId) return;
-  if (document.hidden) return;
-
-  db.ref("chats/" + currentChatId + "/messages")
-    .once("value")
-    .then(function (snapshot) {
-      const updates = {};
-
-      snapshot.forEach(function (child) {
-        const msg = child.val();
-        const messageId = child.key;
-
-        if (msg.senderId !== currentUser.uid && msg.seen !== true) {
-          updates["chats/" + currentChatId + "/messages/" + messageId + "/seen"] = true;
-          updates["chats/" + currentChatId + "/messages/" + messageId + "/delivered"] = true;
-        }
-      });
-
-      if (Object.keys(updates).length > 0) {
-        return db.ref().update(updates);
+function markChatAsDelivered(chatId) {
+  if (!currentUser) return;
+  db.ref("chats/" + chatId + "/messages").once("value", (snapshot) => {
+    const updates = {};
+    snapshot.forEach((child) => {
+      const msg = child.val();
+      if (msg.senderId !== currentUser.uid && msg.delivered !== true) {
+        updates["chats/" + chatId + "/messages/" + child.key + "/delivered"] = true;
       }
     });
+    if (Object.keys(updates).length) db.ref().update(updates);
+  });
 }
 
-/* ONLINE STATUS */
+function markCurrentChatAsSeen() {
+  if (!currentUser || !currentChatUser || !currentChatId || document.hidden) return;
+  db.ref("unread/" + currentUser.uid + "/" + currentChatId).remove();
+  db.ref("chats/" + currentChatId + "/messages").once("value", (snapshot) => {
+    const updates = {};
+    snapshot.forEach((child) => {
+      const msg = child.val();
+      if (msg.senderId !== currentUser.uid && msg.seen !== true) {
+        updates["chats/" + currentChatId + "/messages/" + child.key + "/seen"] = true;
+        updates["chats/" + currentChatId + "/messages/" + child.key + "/delivered"] = true;
+      }
+    });
+    if (Object.keys(updates).length) db.ref().update(updates);
+  });
+}
+
 function setOnlineStatus() {
   if (!currentUser) return;
-
   const statusRef = db.ref("status/" + currentUser.uid);
-
-  statusRef.update({
-    state: "online",
-    lastSeen: Date.now(),
-  });
-
-  statusRef.onDisconnect().update({
-    state: "offline",
-    lastSeen: Date.now(),
+  detachRef(connectedRef);
+  connectedRef = db.ref(".info/connected");
+  connectedRef.on("value", (snap) => {
+    if (snap.val() === true) {
+      statusRef.onDisconnect().update({ state: "offline", lastSeen: firebase.database.ServerValue.TIMESTAMP });
+      statusRef.update({ state: "online", lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    }
   });
 }
 
 function listenChatStatus(uid) {
-  if (currentStatusRef) {
-    currentStatusRef.off();
-  }
-
+  detachRef(currentStatusRef);
   currentStatusRef = db.ref("status/" + uid);
-
-  currentStatusRef.on("value", function (snapshot) {
+  currentStatusRef.on("value", (snapshot) => {
     const status = snapshot.val();
-    const statusDiv = document.getElementById("chatStatus");
-
+    const statusDiv = $("chatStatus");
     if (!statusDiv) return;
-
-    if (!status) {
-      statusDiv.innerText = "Offline";
-      return;
-    }
-
-    if (status.state === "online") {
-      statusDiv.innerText = "Online";
-    } else {
-      const time = new Date(status.lastSeen).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      statusDiv.innerText = "Last seen " + time;
-    }
+    if (status && status.state === "online") statusDiv.textContent = "Online";
+    else statusDiv.textContent = formatLastSeen(status && status.lastSeen);
   });
 }
 
-/* TYPING */
 function handleTyping() {
-  if (!currentUser || !currentChatUser) return;
-
-  const chatId = getChatId(currentUser.uid, currentChatUser);
-
-  db.ref("typing/" + chatId + "/" + currentUser.uid).set(true);
-
+  if (!currentUser || !currentChatUser || !currentChatId) return;
+  const typingRef = db.ref("typing/" + currentChatId + "/" + currentUser.uid);
+  typingRef.set(true);
   clearTimeout(typingTimer);
-
-  typingTimer = setTimeout(function () {
-    db.ref("typing/" + chatId + "/" + currentUser.uid).remove();
-  }, 1500);
+  typingTimer = setTimeout(() => typingRef.remove(), 1300);
 }
 
 function listenTypingStatus(otherUid) {
-  if (currentTypingRef) {
-    currentTypingRef.off();
-  }
-
+  detachRef(currentTypingRef);
   const chatId = getChatId(currentUser.uid, otherUid);
   currentTypingRef = db.ref("typing/" + chatId + "/" + otherUid);
-
-  currentTypingRef.on("value", function (snapshot) {
-    const isTyping = snapshot.val();
-
-    if (isTyping) {
-      document.getElementById("chatStatus").innerText = "typing...";
-    } else {
-      updateChatHeaderStatus(otherUid);
-    }
+  currentTypingRef.on("value", (snapshot) => {
+    if (snapshot.val()) $("chatStatus").textContent = "typing...";
+    else updateChatHeaderStatus(otherUid);
   });
 }
 
 function updateChatHeaderStatus(uid) {
-  db.ref("status/" + uid).once("value", function (snapshot) {
+  db.ref("status/" + uid).once("value", (snapshot) => {
     const status = snapshot.val();
-    const statusDiv = document.getElementById("chatStatus");
-
-    if (!statusDiv) return;
-
-    if (status && status.state === "online") {
-      statusDiv.innerText = "Online";
-    } else if (status && status.lastSeen) {
-      const time = new Date(status.lastSeen).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
-      statusDiv.innerText = "Last seen " + time;
-    } else {
-      statusDiv.innerText = "Offline";
-    }
+    if (status && status.state === "online") $("chatStatus").textContent = "Online";
+    else $("chatStatus").textContent = formatLastSeen(status && status.lastSeen);
   });
 }
 
-/* DOM READY */
-document.addEventListener("DOMContentLoaded", function () {
-  const messageInput = document.getElementById("messageInput");
-  const searchInput = document.getElementById("searchInput");
-
+document.addEventListener("DOMContentLoaded", () => {
+  initTheme();
+  const enableNotifyBtn = document.getElementById("enableNotifyBtn");
+  if (enableNotifyBtn) enableNotifyBtn.addEventListener("click", enableMessageAlerts);
+  const messageInput = $("messageInput");
+  const searchInput = $("searchInput");
   if (messageInput) {
-    messageInput.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") {
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
         sendMessage();
       }
     });
-
-    messageInput.addEventListener("input", function () {
-      handleTyping();
-    });
+    messageInput.addEventListener("input", handleTyping);
   }
-
   if (searchInput) {
-    searchInput.addEventListener("keypress", function (e) {
+    searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         searchUser();
@@ -1204,20 +1143,11 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-document.addEventListener("visibilitychange", function () {
-  if (!document.hidden && currentChatUser) {
-    markCurrentChatAsSeen();
-  }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { document.title = originalTitle; clearInterval(window.aaVaultTitleTimer); }
+  if (!document.hidden && currentChatUser) markCurrentChatAsSeen();
 });
 
-/* RESIZE */
-window.addEventListener("resize", function () {
-  const rightPanel = document.getElementById("rightPanel");
-
-  if (window.innerWidth > 768) {
-    rightPanel.classList.remove("active");
-    rightPanel.style.display = "flex";
-  } else {
-    rightPanel.style.display = "";
-  }
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 900) $("rightPanel").classList.remove("active");
 });
