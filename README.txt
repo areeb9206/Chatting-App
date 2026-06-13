@@ -1,22 +1,19 @@
-The A&A Vault - Premium Chat App
+The A&A Vault - Premium Free Alerts Build
 
-This ZIP is updated for the new Firebase project:
-Project ID: the-aa-vault
+Updated fixes in this build:
+- Signup page opens first for new users.
+- Search button stays hidden until the user starts typing.
+- Search works with Enter key from the keyboard.
+- Mobile/WebView chat back button returns to the contact list instead of closing the app.
+- Browser/Android back button now closes the open chat/account panel first.
+- Added WebView/mobile scroll protection to stop pull-to-refresh while chatting.
+- Chat messages, contact list, search results and account panel have smooth mobile scrolling.
+- Premium dark/light theme and free in-app alerts are included.
 
-Important fixes in this version:
-- New Firebase config added in app.js
-- Signup denied issue fixed for auth-only/locked database rules
-- Signup now creates Firebase Auth user first, then saves username/profile after login
-- Friend request undefined username fix included
-- Push/Blaze/Cloud Functions removed
-- Free in-app alerts only
-- Premium UI with dark/light mode
-
-Firebase setup required:
-1. Firebase Console > Authentication > Sign-in method > Email/Password > Enable
-2. Firebase Console > Realtime Database > Create Database
-3. Realtime Database > Rules > paste these rules and Publish:
-
+Firebase setup:
+1. Enable Authentication > Email/Password.
+2. Create Realtime Database.
+3. Use these development rules while testing:
 {
   "rules": {
     ".read": "auth != null",
@@ -24,22 +21,7 @@ Firebase setup required:
   }
 }
 
-Important:
-- Keep app.js databaseURL same as your Realtime Database URL.
-- Current app.js uses:
-  https://the-aa-vault-default-rtdb.firebaseio.com
-- If Firebase shows a different database URL, replace databaseURL in app.js.
-
-How to test:
-1. Run app with VS Code Live Server / localhost / HTTPS hosting.
-2. Create a new account with username, name, email and password.
-3. Login with username or email.
-4. Search another username and send friend request.
-5. Accept request and start chat.
-
-Free alerts:
-This version does not need Blaze plan. It supports in-app sound, toast, unread badge and title alert while the app is open.
-Real background notifications when the app is fully closed are not included because those need backend/Blaze or another push service.
-
-Firebase Hosting deploy optional:
-firebase deploy --only hosting,database --project the-aa-vault
+Note for APK/WebIntoApp:
+- Browser/app-closed push notifications are not included because Firebase Cloud Functions requires Blaze billing.
+- This build uses free in-app alerts only.
+- If Android shows a security warning while installing APK, it usually comes from installing an APK outside Play Store/unknown sources or the WebView wrapper/signing, not from this frontend code. Build the APK from the official dashboard, sign it properly, avoid extra permissions, and test on another device.

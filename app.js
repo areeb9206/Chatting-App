@@ -26,11 +26,13 @@ let typingTimer = null;
 let toastTimer = null;
 let editingMessageId = null;
 let editingChatId = null;
+let suppressNextHistoryPush = false;
 
 let currentMessagesRef = null;
 let currentStatusRef = null;
 let currentTypingRef = null;
 let requestsRef = null;
+let sentRequestsRef = null;
 let contactsRef = null;
 let myProfileRef = null;
 let connectedRef = null;
@@ -180,6 +182,154 @@ function showLocalMessageAlert(senderName, text) {
 }
 
 
+
+
+const CREATOR_USERNAME = "areebahmed";
+let tutorialMode = "app";
+let tutorialStepIndex = 0;
+let activeTutorialSteps = [];
+
+const tutorials = {
+  auth: [
+    {
+      target: ".auth-brand",
+      title: "Welcome to The A&A Vault",
+      text: "Create your free account first. The app opens on Sign Up because most new visitors will need to register before chatting. Built by Areeb Ahmed."
+    },
+    {
+      target: "#username",
+      title: "Choose a username",
+      text: "Pick a simple unique username. Your friends can search this username to add you. Example: areebahmed."
+    },
+    {
+      target: "#photoURL",
+      title: "Profile picture tip",
+      text: "For your profile picture, paste a direct image URL here. If you do not have a link, leave it blank and the app will create an avatar automatically."
+    },
+    {
+      target: "#email",
+      title: "Create your account",
+      text: "Enter your email and password, then press Create Vault Account. After signup, you can add contacts and start chatting."
+    }
+  ],
+  app: [
+    {
+      target: ".profile-info",
+      title: "This is your account area",
+      text: "Tap your profile to update your display picture, switch theme, enable message alerts, or log out."
+    },
+    {
+      target: "#searchInput",
+      title: "Add your first contact",
+      text: "New here? Search for @areebahmed, then send a request to add the creator contact."
+    },
+    {
+      target: "#requestsSection",
+      title: "Requests and pending invites",
+      text: "This section appears only when you receive a friend request or when you have sent one. After acceptance, it hides automatically."
+    },
+    {
+      target: "#userList",
+      title: "Contacts stay organized",
+      text: "Contacts with the newest messages move to the top, so your latest chats are always easy to find."
+    },
+    {
+      target: "#emptyState",
+      title: "Chat options",
+      text: "Open any chat and use the three-dot menu beside a message to Reply, Copy, Edit, or Delete."
+    }
+  ]
+};
+
+function clearTutorialHighlight() {
+  document.querySelectorAll(".tutorial-highlight").forEach((el) => el.classList.remove("tutorial-highlight"));
+}
+
+function positionTutorialCard(target) {
+  const card = $("tutorialCard");
+  if (!card || !target || isMobileLayout()) return;
+  const rect = target.getBoundingClientRect();
+  const cardWidth = Math.min(370, window.innerWidth - 28);
+  const cardHeight = card.offsetHeight || 230;
+  let left = rect.right + 18;
+  let top = rect.top + rect.height / 2 - cardHeight / 2;
+  if (left + cardWidth > window.innerWidth - 18) left = rect.left - cardWidth - 18;
+  if (left < 18) left = Math.max(18, window.innerWidth / 2 - cardWidth / 2);
+  top = Math.max(18, Math.min(top, window.innerHeight - cardHeight - 18));
+  card.style.left = left + "px";
+  card.style.top = top + "px";
+  card.style.transform = "none";
+}
+
+function renderTutorialStep() {
+  const overlay = $("tutorialOverlay");
+  if (!overlay || !activeTutorialSteps.length) return;
+  const step = activeTutorialSteps[tutorialStepIndex];
+  $("tutorialTitle").textContent = step.title;
+  $("tutorialText").textContent = step.text;
+  const nextBtn = document.querySelector(".tutorial-next");
+  if (nextBtn) nextBtn.textContent = tutorialStepIndex === activeTutorialSteps.length - 1 ? "Done" : "Next";
+  const dots = $("tutorialDots");
+  if (dots) {
+    dots.innerHTML = activeTutorialSteps.map((_, i) => `<span class="tutorial-dot ${i === tutorialStepIndex ? "active" : ""}"></span>`).join("");
+  }
+  clearTutorialHighlight();
+  const target = step.target ? document.querySelector(step.target) : null;
+  if (target) {
+    if (target.classList.contains("hidden-section") && step.target === "#requestsSection") {
+      // Keep the explanation visible without forcing an empty requests panel to open.
+      positionTutorialCard(document.querySelector("#searchInput") || document.querySelector("#userList"));
+    } else {
+      target.classList.add("tutorial-highlight");
+      try { target.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }); } catch (_) {}
+      setTimeout(() => positionTutorialCard(target), 180);
+    }
+  } else {
+    const card = $("tutorialCard");
+    if (card && !isMobileLayout()) {
+      card.style.left = "50%";
+      card.style.top = "50%";
+      card.style.transform = "translate(-50%, -50%)";
+    }
+  }
+}
+
+function openTutorial(mode = "app", force = true) {
+  tutorialMode = mode === "auth" ? "auth" : "app";
+  activeTutorialSteps = tutorials[tutorialMode] || tutorials.app;
+  tutorialStepIndex = 0;
+  const overlay = $("tutorialOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("hidden");
+  renderTutorialStep();
+  if (force && tutorialMode === "app") localStorage.setItem("aaVaultAppTourSeen", "1");
+  if (force && tutorialMode === "auth") localStorage.setItem("aaVaultAuthTourSeen", "1");
+}
+
+function nextTutorialStep() {
+  if (tutorialStepIndex >= activeTutorialSteps.length - 1) return skipTutorial();
+  tutorialStepIndex += 1;
+  renderTutorialStep();
+}
+
+function skipTutorial() {
+  const overlay = $("tutorialOverlay");
+  if (overlay) overlay.classList.add("hidden");
+  clearTutorialHighlight();
+  if (tutorialMode === "app") localStorage.setItem("aaVaultAppTourSeen", "1");
+  if (tutorialMode === "auth") localStorage.setItem("aaVaultAuthTourSeen", "1");
+}
+
+function maybeShowAuthTutorial() {
+  if (localStorage.getItem("aaVaultAuthTourSeen") === "1") return;
+  setTimeout(() => openTutorial("auth", true), 650);
+}
+
+function maybeShowAppTutorial() {
+  if (localStorage.getItem("aaVaultAppTourSeen") === "1") return;
+  setTimeout(() => openTutorial("app", true), 850);
+}
+
 function escapeHtml(text) {
   if (text === undefined || text === null) return "";
   return String(text)
@@ -256,6 +406,30 @@ function showRightOnMobile() {
   if (window.innerWidth <= 900) $("rightPanel").classList.add("active");
 }
 
+function isMobileLayout() {
+  return window.innerWidth <= 900;
+}
+
+function ensureBaseHistoryState() {
+  if (!window.history || !currentUser) return;
+  if (!history.state || !history.state.aaVault) {
+    history.replaceState({ aaVault: true, panel: "list" }, "", location.href);
+  }
+}
+
+function pushPanelHistory(panel) {
+  if (!isMobileLayout() || !currentUser || suppressNextHistoryPush) return;
+  ensureBaseHistoryState();
+  if (!history.state || history.state.panel !== panel) {
+    history.pushState({ aaVault: true, panel }, "", location.href);
+  }
+}
+
+function isAccountPanelOpen() {
+  const panel = $("accountPanel");
+  return panel && panel.style.display !== "none";
+}
+
 function showTab(tabId, btn) {
   document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.remove("active"));
   document.querySelectorAll(".tab-btn").forEach((button) => button.classList.remove("active"));
@@ -286,7 +460,9 @@ auth.onAuthStateChanged((user) => {
     loadContacts();
     setOnlineStatus();
     autoRegisterPushIfAllowed();
+    ensureBaseHistoryState();
     hideLoader();
+    maybeShowAppTutorial();
   } else {
     cleanupAppListeners();
     currentUser = null;
@@ -294,7 +470,10 @@ auth.onAuthStateChanged((user) => {
     currentChatId = null;
     $("chatSection").style.display = "none";
     $("authSection").style.display = "flex";
+    const signupBtn = document.querySelector(".tab-btn:nth-child(2)");
+    if (signupBtn) showTab("signupTab", signupBtn);
     hideLoader();
+    maybeShowAuthTutorial();
   }
 });
 
@@ -303,6 +482,7 @@ function cleanupAppListeners() {
   detachRef(currentStatusRef);
   detachRef(currentTypingRef);
   detachRef(requestsRef);
+  detachRef(sentRequestsRef);
   detachRef(contactsRef);
   detachRef(myProfileRef);
   detachRef(connectedRef);
@@ -311,6 +491,7 @@ function cleanupAppListeners() {
   currentStatusRef = null;
   currentTypingRef = null;
   requestsRef = null;
+  sentRequestsRef = null;
   contactsRef = null;
   myProfileRef = null;
   connectedRef = null;
@@ -481,6 +662,7 @@ function openAccountPanel() {
   hideAllRightPanels();
   $("accountPanel").style.display = "flex";
   showRightOnMobile();
+  pushPanelHistory("account");
 }
 
 function closeAccountPanel() {
@@ -494,7 +676,7 @@ function closeAccountPanel() {
 }
 
 function searchUser() {
-  const keyword = $("searchInput").value.trim().toLowerCase();
+  const keyword = $("searchInput").value.trim().toLowerCase().replace(/^@/, "");
   const resultDiv = $("searchResult");
   clearNode(resultDiv);
   if (!keyword) return;
@@ -572,13 +754,24 @@ function sendRequest(toUid) {
       const safeName = myData.name || currentUser.displayName || (currentUser.email ? currentUser.email.split("@")[0] : "User");
       const safeUsername = myData.username || (currentUser.email ? currentUser.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "") : "user");
 
-      return db.ref("requests/" + toUid + "/" + currentUser.uid).set({
+      const timestamp = Date.now();
+      const requestData = {
         fromUid: currentUser.uid,
         fromName: safeName,
         fromUsername: safeUsername,
         fromPhotoURL: myData.photoURL || "",
-        timestamp: Date.now(),
-      });
+        toUid,
+        timestamp,
+        status: "pending",
+      };
+      const updates = {};
+      updates["requests/" + toUid + "/" + currentUser.uid] = requestData;
+      updates["sentRequests/" + currentUser.uid + "/" + toUid] = {
+        toUid,
+        timestamp,
+        status: "pending",
+      };
+      return db.ref().update(updates);
     })
     .then(() => {
       showToast("Request sent.", "success");
@@ -589,32 +782,78 @@ function sendRequest(toUid) {
 
 function loadRequests() {
   const requestList = $("requestList");
-  detachRef(requestsRef);
-  requestsRef = db.ref("requests/" + currentUser.uid);
-  requestsRef.on("value", (snapshot) => {
+  const requestsSection = $("requestsSection") || (requestList ? requestList.closest(".list-section") : null);
+  let incomingRequests = {};
+  let outgoingRequests = {};
+
+  function renderRequestsPanel() {
+    if (!requestList) return;
     clearNode(requestList);
-    if (!snapshot.exists()) {
-      requestList.className = "list-content empty-small";
-      requestList.textContent = "No requests";
+    const incoming = Object.entries(incomingRequests || {}).filter(([, req]) => req);
+    const outgoing = Object.entries(outgoingRequests || {}).filter(([, req]) => req);
+
+    if (!incoming.length && !outgoing.length) {
+      requestList.className = "list-content";
+      if (requestsSection) requestsSection.classList.add("hidden-section");
       return;
     }
+
+    if (requestsSection) requestsSection.classList.remove("hidden-section");
     requestList.className = "list-content";
-    snapshot.forEach((child) => {
-      const req = child.val();
-      const fromUid = child.key;
-      const div = document.createElement("div");
-      div.className = "request-item";
-      div.innerHTML = `
-        <div class="item-head">
-          <img src="${escapeHtml(getProfilePhoto(req.fromPhotoURL, req.fromName))}" class="contact-pic" alt="">
-          <div><strong>${escapeHtml(req.fromName || "User")}</strong><small>@${escapeHtml(req.fromUsername || "")}</small></div>
-        </div>
-        <div class="item-actions">
-          <button class="accept-btn" onclick="acceptRequest('${fromUid}')">Accept</button>
-          <button class="reject-btn" onclick="rejectRequest('${fromUid}')">Reject</button>
-        </div>`;
-      requestList.appendChild(div);
-    });
+
+    incoming
+      .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))
+      .forEach(([fromUid, req]) => {
+        const div = document.createElement("div");
+        div.className = "request-item";
+        div.innerHTML = `
+          <div class="item-head">
+            <img src="${escapeHtml(getProfilePhoto(req.fromPhotoURL, req.fromName))}" class="contact-pic" alt="">
+            <div><strong>${escapeHtml(req.fromName || "User")}</strong><small>@${escapeHtml(req.fromUsername || "")}</small></div>
+          </div>
+          <div class="item-actions">
+            <button class="accept-btn" onclick="acceptRequest('${fromUid}')">Accept</button>
+            <button class="reject-btn" onclick="rejectRequest('${fromUid}')">Reject</button>
+          </div>`;
+        requestList.appendChild(div);
+      });
+
+    outgoing
+      .sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0))
+      .forEach(([toUid, req]) => {
+        db.ref("users/" + toUid).once("value").then((userSnap) => {
+          if (!$("requestList")) return;
+          if (!outgoingRequests[toUid]) return;
+          const user = userSnap.val() || {};
+          const div = document.createElement("div");
+          div.className = "request-item pending-request";
+          div.dataset.pendingUid = toUid;
+          div.innerHTML = `
+            <div class="item-head">
+              <img src="${escapeHtml(getProfilePhoto(user.photoURL, user.name))}" class="contact-pic" alt="">
+              <div><strong>${escapeHtml(user.name || "User")}</strong><small>@${escapeHtml(user.username || "")}</small></div>
+            </div>
+            <div class="item-actions"><button class="disabled-btn" disabled>Pending</button></div>`;
+          const old = requestList.querySelector(`[data-pending-uid="${toUid}"]`);
+          if (old) old.replaceWith(div);
+          else requestList.appendChild(div);
+        });
+      });
+  }
+
+  detachRef(requestsRef);
+  detachRef(sentRequestsRef);
+  requestsRef = db.ref("requests/" + currentUser.uid);
+  sentRequestsRef = db.ref("sentRequests/" + currentUser.uid);
+
+  requestsRef.on("value", (snapshot) => {
+    incomingRequests = snapshot.val() || {};
+    renderRequestsPanel();
+  });
+
+  sentRequestsRef.on("value", (snapshot) => {
+    outgoingRequests = snapshot.val() || {};
+    renderRequestsPanel();
   });
 }
 
@@ -646,6 +885,8 @@ function acceptRequest(fromUid) {
       };
       updates["requests/" + currentUser.uid + "/" + fromUid] = null;
       updates["requests/" + fromUid + "/" + currentUser.uid] = null;
+      updates["sentRequests/" + fromUid + "/" + currentUser.uid] = null;
+      updates["sentRequests/" + currentUser.uid + "/" + fromUid] = null;
       return db.ref().update(updates);
     })
     .then(() => {
@@ -657,8 +898,11 @@ function acceptRequest(fromUid) {
 }
 
 function rejectRequest(fromUid) {
-  db.ref("requests/" + currentUser.uid + "/" + fromUid)
-    .remove()
+  const updates = {};
+  updates["requests/" + currentUser.uid + "/" + fromUid] = null;
+  updates["sentRequests/" + fromUid + "/" + currentUser.uid] = null;
+  db.ref()
+    .update(updates)
     .then(() => showToast("Request rejected.", "success"))
     .catch((error) => showToast(error.message, "error"));
 }
@@ -680,12 +924,22 @@ function loadContacts() {
     snapshot.forEach((child) => {
       const contact = child.val();
       if (!contact || !contact.uid) return;
-      renderContact(contact.uid);
+      renderContact(contact.uid, contact);
     });
   });
 }
 
-function renderContact(uid) {
+
+function reorderContacts() {
+  const userList = $("userList");
+  if (!userList) return;
+  const items = Array.from(userList.querySelectorAll(".contact-item"));
+  items
+    .sort((a, b) => Number(b.dataset.lastActivity || 0) - Number(a.dataset.lastActivity || 0))
+    .forEach((item) => userList.appendChild(item));
+}
+
+function renderContact(uid, contactMeta = {}) {
   db.ref("users/" + uid).once("value", (userSnap) => {
     const user = userSnap.val();
     if (!user) return;
@@ -693,6 +947,7 @@ function renderContact(uid) {
     const div = document.createElement("div");
     div.className = "contact-item";
     div.id = "contact-" + uid;
+    div.dataset.lastActivity = "0";
     div.innerHTML = `
       <div class="contact-pic-wrapper">
         <img src="${escapeHtml(getProfilePhoto(user.photoURL, user.name))}" class="contact-pic" alt="">
@@ -728,9 +983,13 @@ function renderContact(uid) {
       if (!snap.exists()) {
         lastMsgDiv.textContent = "No messages yet";
         lastTimeDiv.textContent = "";
+        div.dataset.lastActivity = String(contactMeta.addedAt || 0);
+        reorderContacts();
         return;
       }
       const msg = snap.val();
+      div.dataset.lastActivity = String(msg.timestamp || contactMeta.addedAt || 0);
+      reorderContacts();
       if (msg.senderId !== currentUser.uid) {
         markChatAsDelivered(chatId);
         const isFirstLoad = lastAlertTimestamps[chatId] === undefined;
@@ -780,13 +1039,15 @@ function openChat(uid, name, photoURL = "") {
   $("chatWithName").textContent = name;
   $("chatContainer").style.display = "flex";
   showRightOnMobile();
+  pushPanelHistory("chat");
   listenChatStatus(uid);
   listenTypingStatus(uid);
   loadMessages();
   setTimeout(markCurrentChatAsSeen, 300);
 }
 
-function goBack() {
+function goBack(skipHistoryPush = false) {
+  suppressNextHistoryPush = !!skipHistoryPush;
   detachRef(currentMessagesRef);
   detachRef(currentStatusRef);
   detachRef(currentTypingRef);
@@ -801,6 +1062,7 @@ function goBack() {
   editingChatId = null;
   document.querySelectorAll(".contact-item").forEach((item) => item.classList.remove("active"));
   showEmptyState();
+  suppressNextHistoryPush = false;
 }
 
 function sendMessage() {
@@ -916,6 +1178,7 @@ function renderMessage(chatId, messageId, msg) {
         <button class="msg-dots" type="button" onclick="toggleMessageMenu('${messageId}')">⋮</button>
         <div id="msgMenu-${messageId}" class="msg-menu">
           <button type="button" onclick="replyToMessageById('${chatId}', '${messageId}')">Reply</button>
+          <button type="button" onclick="copyMessageText('${chatId}', '${messageId}')">Copy</button>
           ${isMine ? `<button type="button" onclick="startEditMessage('${chatId}', '${messageId}')">Edit</button>` : ""}
           <button type="button" onclick="deleteMessageForMe('${chatId}', '${messageId}')">Delete for me</button>
           ${isMine ? `<button type="button" class="delete-menu-btn" onclick="deleteMessageForEveryone('${chatId}', '${messageId}')">Delete for everyone</button>` : ""}
@@ -961,6 +1224,43 @@ function replyToMessageById(chatId, messageId) {
     if (menu) menu.classList.remove("show");
     $("messageInput").focus();
   });
+}
+
+function copyMessageText(chatId, messageId) {
+  db.ref("chats/" + chatId + "/messages/" + messageId).once("value", (snapshot) => {
+    const msg = snapshot.val();
+    if (!msg || msg.deleted || !msg.text) return showToast("Copy karne ke liye message available nahi hai.", "error");
+    const text = String(msg.text);
+    const done = () => {
+      const menu = $("msgMenu-" + messageId);
+      if (menu) menu.classList.remove("show");
+      showToast("Message copied.", "success");
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopyText(text, done));
+    } else {
+      fallbackCopyText(text, done);
+    }
+  });
+}
+
+function fallbackCopyText(text, callback) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    document.execCommand("copy");
+    if (typeof callback === "function") callback();
+  } catch (error) {
+    showToast("Copy failed. Message manually select karke copy karo.", "error");
+  }
+  document.body.removeChild(textarea);
 }
 
 function cancelReply(clear = true) {
@@ -1134,6 +1434,15 @@ document.addEventListener("DOMContentLoaded", () => {
     messageInput.addEventListener("input", handleTyping);
   }
   if (searchInput) {
+    const searchBtn = $("searchBtn");
+    const updateSearchButton = () => {
+      if (!searchBtn) return;
+      const hasText = searchInput.value.trim().length > 0;
+      searchBtn.classList.toggle("hidden", !hasText);
+      if (!hasText && $("searchResult")) $("searchResult").innerHTML = "";
+    };
+    updateSearchButton();
+    searchInput.addEventListener("input", updateSearchButton);
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
@@ -1141,7 +1450,45 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+  setupMobileBackAndScrollFixes();
 });
+
+function setupMobileBackAndScrollFixes() {
+  if (window.aaVaultMobileFixesReady) return;
+  window.aaVaultMobileFixesReady = true;
+
+  window.addEventListener("popstate", () => {
+    if (!currentUser || !isMobileLayout()) return;
+    if (currentChatUser) {
+      goBack(true);
+      return;
+    }
+    if (isAccountPanelOpen()) {
+      closeAccountPanel();
+    }
+  });
+
+  let startY = 0;
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches && e.touches.length) startY = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener("touchmove", (e) => {
+    if (!isMobileLayout() || !e.touches || !e.touches.length) return;
+    const scroller = e.target.closest("#messages, .list-content, .search-result, .account-content");
+    if (!scroller) {
+      e.preventDefault();
+      return;
+    }
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - startY;
+    const atTop = scroller.scrollTop <= 0;
+    const atBottom = Math.ceil(scroller.scrollTop + scroller.clientHeight) >= scroller.scrollHeight;
+    if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+}
 
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) { document.title = originalTitle; clearInterval(window.aaVaultTitleTimer); }

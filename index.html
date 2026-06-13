@@ -30,33 +30,52 @@
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+    <div id="tutorialOverlay" class="tutorial-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
+      <div class="tutorial-backdrop" onclick="skipTutorial()"></div>
+      <section id="tutorialCard" class="tutorial-card">
+        <div class="tutorial-pill">Quick Guide</div>
+        <h2 id="tutorialTitle">Welcome</h2>
+        <p id="tutorialText">Learn how to use The A&amp;A Vault.</p>
+        <div id="tutorialDots" class="tutorial-dots" aria-hidden="true"></div>
+        <div class="tutorial-actions">
+          <button class="tutorial-skip" type="button" onclick="skipTutorial()">Skip</button>
+          <button class="tutorial-next" type="button" onclick="nextTutorialStep()">Next</button>
+        </div>
+      </section>
+    </div>
+
+
     <main id="authSection" class="auth-wrapper" style="display: none">
       <section class="auth-box">
-        <div class="auth-top-actions"><button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme"><span id="authThemeIcon">☾</span></button></div>
+        <div class="auth-top-actions">
+          <button class="help-btn" type="button" onclick="openTutorial('auth')" aria-label="Open guide">?</button>
+          <button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme"><span id="authThemeIcon">☾</span></button>
+        </div>
         <div class="auth-brand">
           <div class="brand-mark">A&amp;A</div>
           <div>
             <h1>The A&amp;A Vault</h1>
             <p>Private messaging with a premium, modern interface.</p>
+            <small class="creator-credit">Created by Areeb Ahmed</small>
           </div>
         </div>
 
         <div class="tabs" role="tablist">
-          <button class="tab-btn active" type="button" onclick="showTab('loginTab', this)">Login</button>
-          <button class="tab-btn" type="button" onclick="showTab('signupTab', this)">Sign Up</button>
+          <button class="tab-btn" type="button" onclick="showTab('loginTab', this)">Login</button>
+          <button class="tab-btn active" type="button" onclick="showTab('signupTab', this)">Sign Up</button>
         </div>
 
-        <div id="loginTab" class="tab-content active">
+        <div id="loginTab" class="tab-content">
           <h2>Welcome Back</h2>
           <label>Username or Email</label>
-          <input type="text" id="loginIdentifier" placeholder="areeb or areeb@email.com" autocomplete="username" />
+          <input type="text" id="loginIdentifier" placeholder="areebahmed or you@email.com" autocomplete="username" />
           <label>Password</label>
           <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" />
           <button class="primary-btn" type="button" onclick="login()">Login</button>
           <button class="link-btn" type="button" onclick="forgotPassword()">Forgot Password?</button>
         </div>
 
-        <div id="signupTab" class="tab-content">
+        <div id="signupTab" class="tab-content active">
           <h2>Create Account</h2>
           <label>Username</label>
           <input type="text" id="username" placeholder="unique username" autocomplete="username" />
@@ -84,6 +103,7 @@
             </div>
           </div>
           <div class="sidebar-actions">
+            <button class="help-btn" type="button" onclick="openTutorial('app')" aria-label="Open guide">?</button>
             <button class="theme-toggle" type="button" onclick="toggleTheme()" aria-label="Toggle theme"><span id="chatThemeIcon">☾</span></button>
             <button class="icon-btn" type="button" onclick="openAccountPanel()" aria-label="Account menu">⋮</button>
           </div>
@@ -91,17 +111,17 @@
 
         <div class="search-box">
           <div class="search-row">
-            <input id="searchInput" placeholder="Search username or name" />
-            <button type="button" onclick="searchUser()">Search</button>
+            <input id="searchInput" placeholder="Search username, name, or @areebahmed" />
+            <button id="searchBtn" class="search-btn" type="button" onclick="searchUser()" aria-label="Search user">Search</button>
           </div>
           <small>Only added contacts can chat with you.</small>
         </div>
 
         <div id="searchResult" class="search-result"></div>
 
-        <section class="list-section">
+        <section id="requestsSection" class="list-section requests-section hidden-section">
           <div class="section-title">Requests</div>
-          <div id="requestList" class="list-content empty-small">No requests</div>
+          <div id="requestList" class="list-content empty-small"></div>
         </section>
 
         <section class="list-section contacts-section">
@@ -116,6 +136,7 @@
             <div class="empty-icon">💬</div>
             <h2>The A&amp;A Vault</h2>
             <p>Select a contact to start private chatting.</p>
+            <small class="empty-credit">Made with care by Areeb Ahmed</small>
           </div>
         </div>
 
@@ -128,6 +149,7 @@
             <img id="accountPhoto" class="account-big-photo" src="" alt="Account profile" />
             <h2 id="accountName">User Name</h2>
             <p class="muted">Manage your profile and account security.</p>
+            <p class="creator-mini">The A&amp;A Vault is built by Areeb Ahmed.</p>
 
             <div class="settings-card">
               <div class="settings-row">
