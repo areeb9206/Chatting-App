@@ -1450,6 +1450,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!hasText && $("searchResult")) $("searchResult").innerHTML = "";
     };
     updateSearchButton();
+    searchInput.addEventListener("focus", () => document.body.classList.add("search-focused"));
+    searchInput.addEventListener("blur", () => setTimeout(() => document.body.classList.remove("search-focused"), 180));
     searchInput.addEventListener("input", updateSearchButton);
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -1458,8 +1460,26 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+  setupMobileViewportFix();
   setupMobileBackAndScrollFixes();
 });
+
+function setupMobileViewportFix() {
+  const setHeight = () => {
+    const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    document.documentElement.style.setProperty("--aa-vh", height + "px");
+    const base = window.innerHeight || height;
+    const keyboardOpen = window.visualViewport && height < base * 0.82;
+    document.body.classList.toggle("keyboard-open", !!keyboardOpen);
+  };
+  setHeight();
+  window.addEventListener("resize", setHeight, { passive: true });
+  window.addEventListener("orientationchange", () => setTimeout(setHeight, 250), { passive: true });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", setHeight, { passive: true });
+    window.visualViewport.addEventListener("scroll", setHeight, { passive: true });
+  }
+}
 
 function setupMobileBackAndScrollFixes() {
   if (window.aaVaultMobileFixesReady) return;
