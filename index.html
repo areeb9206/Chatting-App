@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The A&amp;A Vault</title>
-    <meta name="description" content="The A&A Vault - a premium private chatting app" />
+    <meta name="description" content="The A&A Vault - private chatting app" />
     <meta name="theme-color" content="#0b1020" />
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
@@ -23,7 +23,7 @@
       <div class="loader-card">
         <div class="brand-mark">A&amp;A</div>
         <h1>The A&amp;A Vault</h1>
-        <p>Securing your chats...</p>
+        <p>Loading...</p>
         <div class="loader-line"><span></span></div>
       </div>
     </div>
@@ -55,7 +55,7 @@
           <div class="brand-mark">A&amp;A</div>
           <div>
             <h1>The A&amp;A Vault</h1>
-            <p>Private messaging with a premium, modern interface.</p>
+            <p>Chat privately with your contacts.</p>
             <small class="creator-credit">Created by Areeb Ahmed</small>
           </div>
         </div>
@@ -111,10 +111,10 @@
 
         <div class="search-box">
           <div class="search-row">
-            <input id="searchInput" placeholder="Search username, name, or @areebahmed" />
+            <input id="searchInput" placeholder="Search username or @areebahmed" />
             <button id="searchBtn" class="search-btn" type="button" onclick="searchUser()" aria-label="Search user">Search</button>
           </div>
-          <small>Only added contacts can chat with you.</small>
+          <small>Search @areebahmed to add the app creator.</small>
         </div>
 
         <div id="searchResult" class="search-result"></div>
@@ -127,6 +127,10 @@
         <section class="list-section contacts-section">
           <div class="section-title">Contacts</div>
           <div id="userList" class="list-content empty-small">No contacts yet</div>
+          <div class="sidebar-feedback">
+            <span>Have an idea or found an issue?</span>
+            <a id="feedbackLink" href="#" target="_self">Send feedback</a>
+          </div>
         </section>
       </aside>
 
@@ -136,7 +140,7 @@
             <div class="empty-icon">💬</div>
             <h2>The A&amp;A Vault</h2>
             <p>Select a contact to start private chatting.</p>
-            <small class="empty-credit">Made with care by Areeb Ahmed</small>
+            <small class="empty-credit">Created by Areeb Ahmed</small>
           </div>
         </div>
 
@@ -149,7 +153,7 @@
             <img id="accountPhoto" class="account-big-photo" src="" alt="Account profile" />
             <h2 id="accountName">User Name</h2>
             <p class="muted">Manage your profile and account security.</p>
-            <p class="creator-mini">The A&amp;A Vault is built by Areeb Ahmed.</p>
+            <p class="creator-mini">Created by Areeb Ahmed.</p>
 
             <div class="settings-card">
               <div class="settings-row">
@@ -165,7 +169,7 @@
               <div class="settings-row">
                 <div>
                   <strong>Theme</strong>
-                  <small>Switch between premium dark mode and clean light mode.</small>
+                  <small>Switch between dark and light mode.</small>
                 </div>
                 <button class="theme-toggle" type="button" onclick="toggleTheme()"><span id="accountThemeIcon">☾</span> Theme</button>
               </div>

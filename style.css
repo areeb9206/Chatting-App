@@ -1038,3 +1038,204 @@ html[data-theme="light"] .auth-box::-webkit-scrollbar-thumb {
     transform: none !important;
   }
 }
+
+/* Final mobile auth, guide spotlight, and feedback polish */
+body.auth-screen {
+  position: relative !important;
+  width: 100% !important;
+  min-height: 100dvh !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+}
+body.auth-screen .auth-wrapper {
+  min-height: 100dvh;
+  height: auto;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(18px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
+  overflow: visible;
+}
+body.auth-screen .auth-box {
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0 auto;
+}
+body.app-screen {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Cleaner tutorial spotlight: keep the selected area visible */
+.tutorial-backdrop {
+  background: rgba(2, 6, 23, .42) !important;
+  backdrop-filter: none !important;
+}
+.tutorial-highlight {
+  position: relative;
+  z-index: 10003 !important;
+  outline: 3px solid rgba(94, 234, 212, .9) !important;
+  outline-offset: 6px !important;
+  box-shadow: 0 0 0 6px rgba(94, 234, 212, .13), 0 16px 40px rgba(0,0,0,.28) !important;
+  filter: none !important;
+}
+.tutorial-card {
+  z-index: 10004 !important;
+}
+
+/* Sidebar feedback area */
+.sidebar-feedback {
+  margin: 10px 12px 14px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.sidebar-feedback span {
+  display: block;
+  margin-bottom: 9px;
+}
+.sidebar-feedback a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--self-text);
+  background: linear-gradient(135deg, var(--brand-2), var(--brand));
+  text-decoration: none;
+  font-weight: 900;
+}
+html[data-theme="light"] .sidebar-feedback a {
+  color: #ffffff;
+}
+.contacts-section .list-content.empty-small + .sidebar-feedback {
+  margin-top: auto;
+}
+
+@media (max-width: 900px) {
+  body.auth-screen { position: relative !important; }
+  body.auth-screen .auth-wrapper { padding: 12px 12px 22px; }
+  body.auth-screen .auth-box { width: 100%; }
+  .tutorial-highlight {
+    outline-offset: 4px !important;
+    box-shadow: 0 0 0 4px rgba(94, 234, 212, .12), 0 10px 28px rgba(0,0,0,.28) !important;
+  }
+}
+
+@media (max-height: 720px) {
+  body.auth-screen .auth-brand { margin-bottom: 16px; }
+  body.auth-screen .auth-box { padding: 18px; }
+  body.auth-screen label { margin-top: 9px; }
+  body.auth-screen .primary-btn { margin-top: 11px; }
+}
+
+
+/* Final auth/mobile scroll + search/feedback refinements */
+html.auth-screen-root,
+html.auth-screen-root body {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: contain !important;
+}
+html.app-screen-root,
+html.app-screen-root body {
+  height: 100% !important;
+  overflow: hidden !important;
+}
+body.auth-screen {
+  min-height: 100svh !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+body.auth-screen::before {
+  position: fixed;
+}
+body.auth-screen .auth-wrapper {
+  min-height: auto !important;
+  height: auto !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  overflow: visible !important;
+  padding: max(14px, env(safe-area-inset-top)) 12px calc(44px + env(safe-area-inset-bottom)) !important;
+}
+body.auth-screen .auth-box {
+  width: min(450px, 100%) !important;
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0 auto 34px !important;
+}
+#searchInput::placeholder {
+  color: var(--muted-2);
+}
+.sidebar-feedback {
+  width: min(230px, calc(100% - 48px));
+  margin: 8px auto 12px !important;
+  padding: 10px 11px !important;
+  border-radius: 15px !important;
+  text-align: center;
+  font-size: 11.5px !important;
+}
+.sidebar-feedback span {
+  margin-bottom: 7px !important;
+}
+.sidebar-feedback a {
+  min-height: 30px !important;
+  padding: 7px 11px !important;
+  font-size: 11.5px;
+}
+@media (max-width: 520px) {
+  body.auth-screen .auth-wrapper {
+    padding: 10px 10px calc(58px + env(safe-area-inset-bottom)) !important;
+  }
+  body.auth-screen .auth-box {
+    padding: 16px !important;
+    border-radius: 22px !important;
+  }
+  body.auth-screen .auth-brand {
+    gap: 11px;
+    margin-bottom: 13px !important;
+  }
+  body.auth-screen .auth-brand .brand-mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 15px;
+    font-size: 13px;
+  }
+  body.auth-screen .auth-brand h1 {
+    font-size: 20px !important;
+  }
+  body.auth-screen .auth-brand p,
+  body.auth-screen .creator-credit {
+    font-size: 11.5px;
+  }
+  body.auth-screen .tabs {
+    margin-bottom: 14px;
+  }
+  body.auth-screen .tab-content h2 {
+    font-size: 19px;
+    margin-bottom: 8px;
+  }
+  body.auth-screen label {
+    margin: 8px 0 5px !important;
+    font-size: 12px;
+  }
+  body.auth-screen input {
+    padding: 11px 12px;
+    border-radius: 13px;
+    font-size: 13px;
+  }
+  body.auth-screen .primary-btn,
+  body.auth-screen .link-btn {
+    margin-top: 10px !important;
+    padding: 12px 14px;
+  }
+}

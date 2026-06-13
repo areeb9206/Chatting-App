@@ -194,7 +194,7 @@ const tutorials = {
     {
       target: ".auth-brand",
       title: "Welcome to The A&A Vault",
-      text: "Create your free account first. The app opens on Sign Up because most new visitors will need to register before chatting. Built by Areeb Ahmed."
+      text: "Create your account first. The app opens on Sign Up for new users."
     },
     {
       target: "#username",
@@ -204,7 +204,7 @@ const tutorials = {
     {
       target: "#photoURL",
       title: "Profile picture tip",
-      text: "For your profile picture, paste a direct image URL here. If you do not have a link, leave it blank and the app will create an avatar automatically."
+      text: "Paste a direct image link here for your profile picture. You can leave it blank and update it later."
     },
     {
       target: "#email",
@@ -221,7 +221,7 @@ const tutorials = {
     {
       target: "#searchInput",
       title: "Add your first contact",
-      text: "New here? Search for @areebahmed, then send a request to add the creator contact."
+      text: "New here? Search @areebahmed and send a request to add Areeb."
     },
     {
       target: "#requestsSection",
@@ -236,7 +236,7 @@ const tutorials = {
     {
       target: "#emptyState",
       title: "Chat options",
-      text: "Open any chat and use the three-dot menu beside a message to Reply, Copy, Edit, or Delete."
+      text: "Open any chat and use the three-dot menu beside a message for Reply, Copy, Edit, or Delete."
     }
   ]
 };
@@ -452,6 +452,10 @@ function setBusy(button, isBusy, text) {
 auth.onAuthStateChanged((user) => {
   if (user) {
     currentUser = user;
+    document.body.classList.remove("auth-screen");
+    document.body.classList.add("app-screen");
+    document.documentElement.classList.remove("auth-screen-root");
+    document.documentElement.classList.add("app-screen-root");
     $("authSection").style.display = "none";
     $("chatSection").style.display = "flex";
     showEmptyState();
@@ -468,6 +472,10 @@ auth.onAuthStateChanged((user) => {
     currentUser = null;
     currentChatUser = null;
     currentChatId = null;
+    document.body.classList.remove("app-screen");
+    document.body.classList.add("auth-screen");
+    document.documentElement.classList.remove("app-screen-root");
+    document.documentElement.classList.add("auth-screen-root");
     $("chatSection").style.display = "none";
     $("authSection").style.display = "flex";
     const signupBtn = document.querySelector(".tab-btn:nth-child(2)");
