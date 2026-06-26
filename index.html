@@ -4,22 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The A&amp;A Vault</title>
-    <meta name="description" content="The A&amp;A Vault is a private chatting web app by Areeb Ahmed with Firebase authentication, contact requests and real-time messaging." />
-    <meta name="author" content="Areeb Ahmed" />
-    <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://areebahmed.site/The-A&amp;A-Vault/" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="The A&amp;A Vault | Private Chatting App" />
-    <meta property="og:description" content="Private chatting app with Firebase login, contacts and real-time messages." />
-    <meta property="og:url" content="https://areebahmed.site/The-A&amp;A-Vault/" />
-    <meta property="og:image" content="https://areebahmed.site/images/chat-vault-preview.png" />
+    <meta name="description" content="The A&A Vault - private chatting app" />
     <meta name="theme-color" content="#0b1020" />
     <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="style.css" />
 
     <script src="https://www.gstatic.com/firebasejs/7.18.0/firebase-app.js"></script>
@@ -37,6 +29,69 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <div id="profileViewer" class="profile-viewer" aria-hidden="true">
+      <div class="profile-viewer-backdrop" onclick="closeProfileViewer()"></div>
+      <section class="profile-viewer-card" role="dialog" aria-modal="true" aria-label="Profile picture viewer">
+        <button class="profile-viewer-close" type="button" onclick="closeProfileViewer()" aria-label="Close">×</button>
+        <img id="profileViewerImg" alt="Profile picture" />
+        <h3 id="profileViewerName">User</h3>
+        <p id="profileViewerUsername"></p>
+      </section>
+    </div>
+
+    <div id="groupModal" class="group-modal" aria-hidden="true">
+      <div class="group-modal-backdrop" onclick="closeGroupModal()"></div>
+      <section class="group-modal-card" role="dialog" aria-modal="true" aria-label="Create group">
+        <button class="group-modal-close" type="button" onclick="closeGroupModal()" aria-label="Close">×</button>
+        <div class="group-modal-head">
+          <div class="group-modal-icon">👥</div>
+          <div>
+            <h2 id="groupModalTitle">New Group</h2>
+            <p>Create a private group and add people from your contacts.</p>
+          </div>
+        </div>
+        <div class="group-form-grid">
+          <label>Group Name</label>
+          <input id="groupNameInput" type="text" placeholder="Friends, Team, Class..." maxlength="40" />
+          <label>Group DP URL <span>optional</span></label>
+          <input id="groupPhotoInput" type="url" placeholder="https://example.com/group-photo.jpg" />
+          <label>Add contacts to group</label>
+          <div class="group-search-row">
+            <input id="groupMemberSearchInput" type="text" placeholder="Search your contacts" />
+            <button type="button" onclick="searchGroupMember()">Add</button>
+          </div>
+          <div id="groupMemberResult" class="group-member-result"></div>
+          <div id="selectedGroupMembers" class="selected-members"></div>
+        </div>
+        <button id="createGroupBtn" class="primary-btn group-create-btn" type="button" onclick="createGroup()">Create Group</button>
+      </section>
+    </div>
+
+    <div id="groupInfoModal" class="group-modal" aria-hidden="true">
+      <div class="group-modal-backdrop" onclick="closeGroupInfo()"></div>
+      <section class="group-modal-card" role="dialog" aria-modal="true" aria-label="Group info">
+        <button class="group-modal-close" type="button" onclick="closeGroupInfo()" aria-label="Close">×</button>
+        <div class="group-info-preview">
+          <img id="groupInfoPhoto" alt="Group DP" />
+          <h2 id="groupInfoName">Group</h2>
+          <p id="groupInfoMembers">Members</p>
+          <div id="groupMembersList" class="group-members-list"></div>
+        </div>
+        <div id="groupAdminTools" class="group-form-grid" style="display:none">
+          <label>Group Name</label>
+          <input id="editGroupNameInput" type="text" placeholder="Group name" maxlength="40" />
+          <label>Group DP URL</label>
+          <input id="editGroupPhotoInput" type="url" placeholder="Paste group image URL" />
+          <button class="secondary-btn" type="button" onclick="updateCurrentGroupInfo()">Update Group</button>
+          <label>Add another contact</label>
+          <div class="group-search-row">
+            <input id="groupInfoMemberInput" type="text" placeholder="Search your contacts" />
+            <button type="button" onclick="addMemberToCurrentGroup()">Add</button>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <div id="tutorialOverlay" class="tutorial-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
       <div class="tutorial-backdrop" onclick="skipTutorial()"></div>
@@ -127,19 +182,33 @@
 
         <div id="searchResult" class="search-result"></div>
 
+        <div class="chat-filter-tabs" role="tablist" aria-label="Chat filters">
+          <button type="button" class="filter-chip active" data-filter="all" onclick="setListFilter('all')">All</button>
+          <button type="button" class="filter-chip" data-filter="groups" onclick="setListFilter('groups')">Groups</button>
+          <button type="button" class="filter-chip" data-filter="unread" onclick="setListFilter('unread')">Unread <span id="unreadFilterCount"></span></button>
+          <button type="button" class="filter-chip" data-filter="pending" onclick="setListFilter('pending')">Requests <span id="pendingFilterCount"></span></button>
+        </div>
+
         <section id="requestsSection" class="list-section requests-section hidden-section">
           <div class="section-title">Requests</div>
           <div id="requestList" class="list-content empty-small"></div>
         </section>
 
+        <section class="list-section groups-section" aria-hidden="true">
+          <div class="section-title">Groups</div>
+          <div id="groupList" class="list-content empty-small">No groups yet</div>
+        </section>
+
         <section class="list-section contacts-section">
-          <div class="section-title">Contacts</div>
+          <div id="combinedSectionTitle" class="section-title">All Chats</div>
           <div id="userList" class="list-content empty-small">No contacts yet</div>
           <div class="sidebar-feedback">
             <span>Have an idea or found an issue?</span>
-            <a id="feedbackLink" href="/#feedback" target="_blank" rel="noopener">Send feedback</a>
+            <a id="feedbackLink" href="#" target="_self">Send feedback</a>
           </div>
         </section>
+
+        <button id="newChatFab" class="new-chat-fab" type="button" onclick="openGroupModal()" aria-label="Create new group">+<span>New group</span></button>
       </aside>
 
       <section id="rightPanel">
